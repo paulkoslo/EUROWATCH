@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Speech Detail</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1 id="speechTitle">Loading...</h1>
+    <div class="speech-main-box">
+      <div class="speech-top-flex" style="flex-direction:row;align-items:stretch;gap:2.5rem;">
+        <section id="aiSpeakerFinderSection">
+          <h3>AI Speaker Finder</h3>
+          <div id="aiSpeakerFinderWindow" style="background:#f8f9fa;border-radius:6px;padding:1rem;min-height:40px;"></div>
+        </section>
+        <section id="speechMetaBox">
+          <h3>Speech Metadata</h3>
+          <p><strong>ID:</strong> <span id="speechId"></span></p>
+          <p><strong>Type:</strong> <span id="speechType"></span></p>
+          <p><strong>Date:</strong> <span id="speechDate"></span></p>
+          <p><strong>HTML:</strong> <a id="speechHtmlLink" href="#" target="_blank">Open HTML</a></p>
+          <section id="mepDetails">
+            <h4>Speaker Info</h4>
+            <p><strong>Name:</strong> <span id="mepName"></span></p>
+            <p><strong>Country:</strong> <span id="mepCountry"></span></p>
+            <p><strong>Political Group:</strong> <span id="mepGroup"></span></p>
+          </section>
+        </section>
+      </div>
+      <section id="aiSummarySection">
+        <h2>AI Summary</h2>
+        <div id="summaryProgress" style="display:none;margin-bottom:1rem;">
+          <div style="display:flex;align-items:center;gap:1rem;">
+            <span id="progressStatus"></span>
+            <span id="progressPercentage"></span>
+          </div>
+          <div style="background:#eee;height:16px;border-radius:8px;overflow:hidden;margin-top:0.5rem;">
+            <div id="progressBar" style="height:100%;width:0;background:var(--eu-blue);"></div>
+          </div>
+        </div>
+        <div id="aiSummary"></div>
+      </section>
+      <section id="aiChatSection">
+        <h3>Ask AI about this Day</h3>
+        <form id="chatForm" style="margin-bottom:0.5rem;display:flex;gap:0.5rem;">
+          <input id="chatInput" type="text" placeholder="Ask a question..." style="flex:1;">
+          <button type="submit">Send</button>
+        </form>
+        <div id="chatWindow" style="background:#f8f9fa;border-radius:6px;padding:1rem;min-height:40px;"></div>
+      </section>
+      <section id="rawJsonSection" style="margin-top:2rem;">
+        <details>
+          <summary>Show raw JSON</summary>
+          <pre id="rawJson" style="background:#f8f9fa;padding:1rem;border-radius:6px;"></pre>
+        </details>
+      </section>
+      <section id="speechContentSection" class="speech-content-section">
+        <h2>Speech Content</h2>
+        <div id="speechContentMain">Loading...</div>
+      </section>
+    </div>
+  </div>
+  <script src="speech.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</body>
+</html>

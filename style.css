@@ -1,0 +1,434 @@
+/* EU Visual Identity Implementation */
+
+:root {
+  /* EU Colors */
+  --eu-blue: #003399;
+  --eu-yellow: #FFCC00;
+  --eu-red: #EF3340;
+  --eu-green: #00A19C;
+  --eu-purple: #6B1D41;
+  --eu-gray-100: #F8F9FA;
+  --eu-gray-200: #E9ECEF;
+  --eu-gray-300: #DEE2E6;
+  --eu-gray-400: #CED4DA;
+  --eu-gray-500: #ADB5BD;
+  --eu-gray-600: #6C757D;
+  --eu-gray-700: #495057;
+  --eu-gray-800: #343A40;
+  --eu-gray-900: #212529;
+}
+
+/* Base Styles */
+body {
+  font-family: 'Source Sans Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  line-height: 1.5;
+  color: var(--eu-gray-800);
+  margin: 0;
+  padding: 0;
+  background-color: var(--eu-gray-100);
+}
+
+/* Header */
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem 0;
+}
+
+.eu-logo {
+  width: 60px;
+  height: 60px;
+  transition: transform 0.3s ease;
+}
+
+.eu-logo:hover {
+  transform: scale(1.05);
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--eu-blue);
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+h1 {
+  font-size: 2.5rem;
+  border-bottom: 4px solid var(--eu-yellow);
+  padding-bottom: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+h2 {
+  font-size: 2rem;
+  border-bottom: 2px solid var(--eu-yellow);
+  padding-bottom: 0.5rem;
+}
+
+/* Layout */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* Navigation */
+.tabs {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  border-bottom: 2px solid var(--eu-gray-300);
+  padding-bottom: 0.5rem;
+}
+
+.tab {
+  background: none;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  font-size: 1.1rem;
+  color: var(--eu-gray-600);
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s, background 0.2s;
+  border-radius: 10px 10px 0 0;
+}
+
+.tab:hover {
+  color: var(--eu-gray-100);
+}
+
+.tab.active,
+.tab.active:hover {
+  color: #fff;
+  background: var(--eu-blue);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.tab.active::after {
+  display: none;
+}
+
+/* Tables */
+.table-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  margin-bottom: 2rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th {
+  background-color: var(--eu-blue);
+  color: white;
+  text-align: left;
+  padding: 1rem;
+  font-weight: 600;
+}
+
+td {
+  padding: 1rem;
+  border-bottom: 1px solid var(--eu-gray-200);
+}
+
+tr:hover {
+  background-color: var(--eu-gray-100);
+}
+
+/* Buttons */
+button {
+  background-color: var(--eu-blue);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+button:hover {
+  background-color: #002b80;
+}
+
+button:disabled {
+  background-color: var(--eu-gray-400);
+  cursor: not-allowed;
+}
+
+/* Form Elements */
+input[type="date"] {
+  padding: 0.5rem;
+  border: 1px solid var(--eu-gray-300);
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+input[type="date"]:focus {
+  outline: none;
+  border-color: var(--eu-blue);
+  box-shadow: 0 0 0 2px rgba(0, 51, 153, 0.2);
+}
+
+/* Charts Layout */
+.charts-container {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.chart-container {
+  flex: 1 1 0;
+  min-width: 0;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .charts-container {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  .chart-container {
+    margin-bottom: 0;
+  }
+}
+
+/* Loading Bar */
+#speechesLoadingBarContainer {
+  background-color: var(--eu-gray-200);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+#speechesLoadingBar {
+  background-color: var(--eu-blue);
+  transition: width 0.3s ease;
+}
+
+/* Filters */
+.filters-container {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+select {
+  padding: 0.5rem;
+  border: 1px solid var(--eu-gray-300);
+  border-radius: 4px;
+  font-size: 1rem;
+  background-color: white;
+}
+
+select:focus {
+  outline: none;
+  border-color: var(--eu-blue);
+  box-shadow: 0 0 0 2px rgba(0, 51, 153, 0.2);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+  
+  .tabs {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .tab {
+    width: 100%;
+    text-align: left;
+  }
+  
+  .filters-container {
+    flex-direction: column;
+  }
+  
+  .filter-group {
+    width: 100%;
+  }
+  
+  table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+/* EU Flag Animation */
+@keyframes euFlagWave {
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(5deg); }
+  75% { transform: rotate(-5deg); }
+  100% { transform: rotate(0deg); }
+}
+
+.eu-flag {
+  width: 24px;
+  height: 24px;
+  margin-right: 0.5rem;
+  animation: euFlagWave 3s ease-in-out infinite;
+}
+
+/* Tab Content */
+.tab-content {
+  display: none;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Speech Page Layout */
+.speech-main-box {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  padding: 2rem 2.5rem;
+  max-width: 900px;
+  margin: 2rem auto 2.5rem auto;
+}
+
+.speech-top-flex {
+  display: flex;
+  gap: 2.5rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 2.5rem;
+}
+
+#speechMetaBox, #fullSpeechApi {
+  flex: 1 1 320px;
+  min-width: 260px;
+  max-width: 420px;
+}
+
+#speechMetaBox h3, #fullSpeechApi h3 {
+  color: var(--eu-blue);
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+#speechMetaBox p, #fullSpeechApi p {
+  margin: 0.3em 0;
+}
+
+#speechMetaBox a, #fullSpeechApi a {
+  color: var(--eu-blue);
+  text-decoration: underline;
+}
+
+#aiSummarySection {
+  margin: 2.5rem 0 1.5rem 0;
+  padding: 1.5rem 1rem;
+  background: var(--eu-gray-100);
+  border-radius: 8px;
+  border-top: 4px solid var(--eu-yellow);
+}
+
+#aiSummarySection h2 {
+  color: var(--eu-blue);
+  border-bottom: 2px solid var(--eu-yellow);
+  padding-bottom: 0.3rem;
+  margin-top: 0;
+}
+
+#aiChatSection {
+  margin: 2rem 0 0 0;
+  padding: 1.5rem 1rem;
+  background: var(--eu-gray-100);
+  border-radius: 8px;
+}
+
+#aiChatSection h3 {
+  color: var(--eu-blue);
+  margin-top: 0;
+}
+
+#chatForm input[type="text"] {
+  padding: 0.5rem;
+  border: 1px solid var(--eu-gray-300);
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+#chatForm button {
+  background: var(--eu-green);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1.2rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+#chatForm button:hover {
+  background: #00897b;
+}
+
+#chatWindow {
+  margin-top: 0.5rem;
+  min-height: 40px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 1rem;
+  font-size: 1rem;
+}
+
+#rawJsonSection details {
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 900px) {
+  .speech-main-box {
+    padding: 1rem 0.5rem;
+  }
+  .speech-top-flex {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+}
+
+.speech-content-section {
+  margin: 2rem 0 2rem 0;
+  padding: 1.5rem 1rem;
+  background: var(--eu-gray-100);
+  border-radius: 8px;
+}
+.speech-content-section h2 {
+  color: var(--eu-blue);
+  border-bottom: 2px solid var(--eu-yellow);
+  padding-bottom: 0.3rem;
+  margin-top: 0;
+}
+#speechContentMain {
+  margin-top: 1rem;
+  font-size: 1.08rem;
+  line-height: 1.7;
+  color: var(--eu-gray-800);
+}
