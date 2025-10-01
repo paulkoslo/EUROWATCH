@@ -72,7 +72,7 @@ async function generateChunkSummary(chunk, chunkNumber, totalChunks) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer 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'
+        'Authorization': 'Bearer YOUR_API_KEY_HERE'
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
@@ -109,7 +109,7 @@ async function generateFinalSummary(chunkSummaries) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer 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'
+        'Authorization': 'Bearer YOUR_API_KEY_HERE'
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
@@ -203,16 +203,38 @@ function renderMarkdown(md) {
 }
 
 (async () => {
-  // Read speech record from sessionStorage
+  let speech = null;
+  
+  // First try to get speech data from sessionStorage
   const recStr = sessionStorage.getItem('speechRecord');
-  if (!recStr) {
+  if (recStr) {
+    speech = JSON.parse(recStr);
+  } else {
+    // If no sessionStorage data, try to get speech ID from URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const speechId = urlParams.get('id');
+    
+    if (speechId) {
+      try {
+        console.log(`🔍 Loading speech data for ID: ${speechId}`);
+        const response = await fetch(`/api/speeches/${encodeURIComponent(speechId)}`);
+        if (response.ok) {
+          speech = await response.json();
+          console.log(`✅ Loaded speech data:`, speech);
+        } else {
+          console.error(`❌ Failed to load speech data: ${response.status}`);
+        }
+      } catch (error) {
+        console.error('❌ Error loading speech data:', error);
+      }
+    }
+  }
+  
+  if (!speech) {
     // If no speech data is found, display a message and provide a link back to the dashboard
     document.body.innerHTML = '<p>No speech data available. Please navigate via the dashboard list.</p><p><a href="index.html">Back</a></p>';
     return;
   }
-
-  // Parse the speech record from sessionStorage
-  const speech = JSON.parse(recStr);
 
   // Populate ID and Type for readability
   // Display the shortened ID and prettified type in the respective HTML elements
@@ -234,7 +256,12 @@ function renderMarkdown(md) {
   const htmlLinkEl = document.getElementById('speechHtmlLink');
   const contentSection = document.getElementById('speechContentSection');
   if (speech.date) {
-    fetch(`/api/speech-html-content?date=${speech.date}`)
+    // Pass both date and speechId to get specific speech content from database
+    const apiUrl = speech.id ? 
+      `/api/speech-html-content?date=${speech.date}&speechId=${encodeURIComponent(speech.id)}` :
+      `/api/speech-html-content?date=${speech.date}`;
+    
+    fetch(apiUrl)
       .then(res => res.ok ? res.json() : { content: '—' })
       .then(async data => {
         let content = data.content || '—';
@@ -273,26 +300,20 @@ function renderMarkdown(md) {
           contentSection.innerHTML = `<details open><summary style="font-size:1.15em;font-weight:600;color:var(--eu-blue);cursor:pointer;outline:none;">Speech Content</summary><div id="speechContentMain">${content.replace(/\n/g, '<br>')}</div></details>`;
           contentSection.setAttribute('data-collapsible', 'true');
         }
-        // Run AI Speaker Finder FIRST
-        runSpeakerFinder(content);
-        // Generate and display AI summary
-        const summaryEl = document.getElementById('aiSummary');
-        if (summaryEl) {
-          summaryEl.innerHTML = 'Generating summary...';
-          try {
-            const summary = await generateAISummary(content);
-            summaryEl.innerHTML = renderMarkdown(summary);
-          } catch (error) {
-            summaryEl.textContent = `Error generating summary: ${error.message}`;
-          }
-        }
-        // Ask AI for speakers
-        askAISpeakers(content);
+        // Don't run AI features automatically - user will click buttons to start them
+        console.log('📝 Content loaded. AI features available via buttons.');
+        
+        // Set up AI button event handlers
+        setupAIButtons(content);
+        
+        // Load individual speeches if available
+        loadIndividualSpeeches(speech.id);
 
         // --- AI Chat Logic ---
         const chatForm = document.getElementById('chatForm');
         const chatInput = document.getElementById('chatInput');
         const chatWindow = document.getElementById('chatWindow');
+        const summaryEl = document.getElementById('aiSummary');
         let chatHistory = [];
         let summaryText = '';
 
@@ -344,7 +365,7 @@ function renderMarkdown(md) {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': 'Bearer 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'
+                'Authorization': 'Bearer YOUR_API_KEY_HERE'
               },
               body: JSON.stringify({
                 model: 'gpt-4o-mini',
@@ -425,10 +446,10 @@ function renderMarkdown(md) {
   // External transcript link if available
   const extLinkEl = document.getElementById('externalLink');
   const extContainer = document.getElementById('externalLinkContainer');
-  if (speech.docIdentifier) {
+  if (extLinkEl && speech.docIdentifier) {
     // Set the href attribute of the external link if a document identifier is available
     extLinkEl.href = `https://data.europa.eu/eli/dl/doc/${speech.docIdentifier}?lang=EN`;
-  } else {
+  } else if (extContainer) {
     // Hide the external link container if no document identifier is available
     extContainer.style.display = 'none';
   }
@@ -438,6 +459,13 @@ function renderMarkdown(md) {
   if (rawEl) {
     // Display the raw JSON data of the speech record
     rawEl.textContent = JSON.stringify(speech, null, 2);
+  }
+
+  // Show raw HTML content
+  const rawHtmlEl = document.getElementById('rawHtml');
+  if (rawHtmlEl && speech.content) {
+    // Display the raw HTML content of the speech
+    rawHtmlEl.textContent = speech.content;
   }
 
   // --- Quick Overview Bar ---
@@ -479,7 +507,7 @@ function renderMarkdown(md) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer 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'
+          'Authorization': 'Bearer YOUR_API_KEY_HERE'
         },
         body: JSON.stringify({
           model: 'gpt-4o-mini',
@@ -515,7 +543,7 @@ function renderMarkdown(md) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer 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'
+          'Authorization': 'Bearer YOUR_API_KEY_HERE'
         },
         body: JSON.stringify({
           model: 'gpt-4o-mini',
@@ -546,3 +574,180 @@ function renderMarkdown(md) {
   // Call quick overview logic after content is loaded
   setQuickSpeakerInfo();
 })();
+
+// Function to load and display individual speeches
+async function loadIndividualSpeeches(sittingId) {
+  try {
+    console.log(`🔍 Loading individual speeches for sitting: ${sittingId}`);
+    const response = await fetch(`/api/speeches/${encodeURIComponent(sittingId)}/individual`);
+    const data = await response.json();
+    
+    if (data.individual_speeches && data.individual_speeches.length > 0) {
+      console.log(`✅ Found ${data.individual_speeches.length} individual speeches`);
+      displayIndividualSpeeches(data.individual_speeches);
+    } else {
+      console.log('ℹ️ No individual speeches found, showing raw content');
+    }
+  } catch (error) {
+    console.error('❌ Error loading individual speeches:', error);
+  }
+}
+
+// Function to display individual speeches
+function displayIndividualSpeeches(speeches) {
+  const contentSection = document.getElementById('speechContentSection');
+  if (!contentSection) return;
+  
+  let html = '<h2>Individual Speeches</h2>';
+  html += `<div style="margin-bottom: 1rem; color: #666;">Found ${speeches.length} individual speeches in this sitting</div>`;
+  
+  let currentTopic = null;
+  
+  speeches.forEach((speech, index) => {
+    const speaker = speech.speaker_name || speech.title || 'Unknown Speaker';
+    // Prioritize standardized political group, fallback to raw political group
+    const group = speech.political_group_std || speech.political_group || '';
+    const title = speech.title || '';
+    const content = speech.speech_content || 'No content available';
+    const language = speech.language || 'EN';
+    const topic = speech.topic || null;
+    const classifiedTopic = speech.classified_topic || null;
+    
+    // Create a unique ID for each speech
+    const speechId = `speech-${speech.speech_order}`;
+    
+    // Determine what to show in the blue box: political group OR title/role
+    const blueBoxText = group || title;
+    
+    // Language mapping for display
+    const languageNames = {
+      'EN': 'English', 'DE': 'German', 'FR': 'French', 'IT': 'Italian', 'ES': 'Spanish',
+      'PL': 'Polish', 'NL': 'Dutch', 'SV': 'Swedish', 'DA': 'Danish', 'EL': 'Greek',
+      'PT': 'Portuguese', 'RO': 'Romanian', 'HU': 'Hungarian', 'CS': 'Czech', 'SK': 'Slovak',
+      'SL': 'Slovenian', 'HR': 'Croatian', 'BG': 'Bulgarian', 'FI': 'Finnish', 'ET': 'Estonian',
+      'LV': 'Latvian', 'LT': 'Lithuanian', 'MT': 'Maltese', 'GA': 'Irish', 'CY': 'Cypriot'
+    };
+    
+    const languageDisplay = languageNames[language] || language;
+    
+    // Show topic header if this speech has a different topic than the previous one
+    if (topic && topic !== currentTopic) {
+      html += `
+        <div style="background: linear-gradient(135deg, #003399, #0044cc); color: #ffffff !important; padding: 0.8rem 1rem; margin: 1rem 0 0.5rem 0; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,51,153,0.3);">
+          <h3 style="margin: 0; font-size: 1.1em; font-weight: 600; color: #ffffff !important;">📋 ${topic}</h3>
+        </div>
+      `;
+      currentTopic = topic;
+    }
+    
+    html += `
+      <div style="border: 1px solid #ddd; border-radius: 8px; margin-bottom: 0.5rem; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        ${classifiedTopic ? `
+          <div style="background: #e8f5e8; color: #2d5a2d; padding: 0.2rem 0.5rem; border-radius: 8px 8px 0 0; font-size: 0.65em; font-weight: 500; text-align: center; border-bottom: 1px solid #d4edda;">
+            AI: ${classifiedTopic}
+          </div>
+        ` : ''}
+        <details style="padding: 0;">
+          <summary style="padding: 1rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; border-radius: ${classifiedTopic ? '0 0 8px 8px' : '8px 8px 0 0'}; list-style: none; outline: none;">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+              <h3 style="margin: 0; color: var(--eu-blue); font-size: 1.1em;">${index + 1}. ${speaker}</h3>
+              <span style="font-size: 0.8em; color: #666; background: #e9ecef; padding: 0.2em 0.5em; border-radius: 4px;">#${speech.speech_order}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              ${blueBoxText ? `<div style="background: var(--eu-blue); color: white; padding: 0.2em 0.6em; border-radius: 6px; font-size: 0.8em; font-weight: 600; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${blueBoxText}">${blueBoxText}</div>` : ''}
+              <div style="background: #28a745; color: white; padding: 0.2em 0.6em; border-radius: 6px; font-size: 0.8em; font-weight: 600;" title="Language: ${languageDisplay}">${language}</div>
+              <div style="color: #666; font-size: 1.2em;">▼</div>
+            </div>
+          </summary>
+          <div style="padding: 1rem; line-height: 1.6; color: #333; border-top: 1px solid #eee;">
+            ${content.replace(/\n/g, '<br>')}
+          </div>
+        </details>
+      </div>
+    `;
+  });
+  
+  contentSection.innerHTML = html;
+  
+  // Add CSS for smooth dropdown animations
+  const style = document.createElement('style');
+  style.textContent = `
+    details[open] summary .dropdown-arrow {
+      transform: rotate(180deg);
+    }
+    .dropdown-arrow {
+      transition: transform 0.2s ease;
+    }
+    details summary::-webkit-details-marker {
+      display: none;
+    }
+    details summary::marker {
+      display: none;
+    }
+  `;
+  document.head.appendChild(style);
+  
+  // Update the dropdown arrows to use the CSS class
+  setTimeout(() => {
+    const arrows = contentSection.querySelectorAll('details summary div:last-child');
+    arrows.forEach(arrow => {
+      arrow.className = 'dropdown-arrow';
+    });
+  }, 100);
+}
+
+// Function to set up AI button event handlers
+function setupAIButtons(content) {
+  // AI Summary Button
+  const startAISummaryBtn = document.getElementById('startAISummaryBtn');
+  if (startAISummaryBtn) {
+    startAISummaryBtn.addEventListener('click', async () => {
+      const summaryEl = document.getElementById('aiSummary');
+      const progressEl = document.getElementById('summaryProgress');
+      
+      if (summaryEl && progressEl) {
+        // Show progress and disable button
+        startAISummaryBtn.disabled = true;
+        startAISummaryBtn.textContent = '🔄 Generating...';
+        progressEl.style.display = 'block';
+        summaryEl.innerHTML = 'Generating AI summary...';
+        
+        try {
+          const summary = await generateAISummary(content);
+          summaryEl.innerHTML = renderMarkdown(summary);
+          startAISummaryBtn.textContent = '✅ Summary Complete';
+        } catch (error) {
+          summaryEl.textContent = `Error generating summary: ${error.message}`;
+          startAISummaryBtn.textContent = '❌ Error - Try Again';
+          startAISummaryBtn.disabled = false;
+        }
+        
+        progressEl.style.display = 'none';
+      }
+    });
+  }
+  
+  // AI Speaker Finder Button
+  const startAISpeakerFinderBtn = document.getElementById('startAISpeakerFinderBtn');
+  if (startAISpeakerFinderBtn) {
+    startAISpeakerFinderBtn.addEventListener('click', async () => {
+      const speakerWindow = document.getElementById('aiSpeakerFinderWindow');
+      
+      if (speakerWindow) {
+        // Disable button and show loading
+        startAISpeakerFinderBtn.disabled = true;
+        startAISpeakerFinderBtn.textContent = '🔄 Finding Speakers...';
+        speakerWindow.innerHTML = 'Finding speakers with AI...';
+        
+        try {
+          await runSpeakerFinder(content);
+          startAISpeakerFinderBtn.textContent = '✅ Speakers Found';
+        } catch (error) {
+          speakerWindow.innerHTML = `Error finding speakers: ${error.message}`;
+          startAISpeakerFinderBtn.textContent = '❌ Error - Try Again';
+          startAISpeakerFinderBtn.disabled = false;
+        }
+      }
+    });
+  }
+}

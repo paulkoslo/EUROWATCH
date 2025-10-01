@@ -50,9 +50,11 @@ async function fetchPreview(date) {
     return;
   }
 
-  // --- Populate filter dropdowns for country and group ---
+  // --- Populate filter dropdowns for country, group, and status ---
+  const statusFilter = document.getElementById('statusFilter');
   const countryFilter = document.getElementById('countryFilter');
   const groupFilter = document.getElementById('groupFilter');
+  const speechCountFilter = document.getElementById('speechCountFilter');
   
   // Get unique countries and groups from MEP data
   const countries = [...new Set(mepsList.map(m => m['api:country-of-representation'] || 'Unknown'))].sort();
@@ -76,17 +78,32 @@ async function fetchPreview(date) {
 
   // --- Filtering logic for MEPs table and charts ---
   function applyFilters() {
+    const selectedStatus = statusFilter.value;
     const selectedCountry = countryFilter.value;
     const selectedGroup = groupFilter.value;
+    const minSpeechCount = parseInt(speechCountFilter.value) || 0;
     mepsPage = 1; // Reset to first page
-    // Filter MEPs by selected country and group
+    
+    // Filter MEPs by all criteria
     filteredMeps = mepsList.filter(mep => {
+      const statusMatch = !selectedStatus || 
+        (selectedStatus === 'current' && mep.isCurrent) ||
+        (selectedStatus === 'historic' && !mep.isCurrent);
       const countryMatch = !selectedCountry || mep['api:country-of-representation'] === selectedCountry;
       const groupMatch = !selectedGroup || mep['api:political-group'] === selectedGroup;
-      return countryMatch && groupMatch;
+      const speechCountMatch = mep.speechCount >= minSpeechCount;
+      
+      return statusMatch && countryMatch && groupMatch && speechCountMatch;
     });
-    // Update total count display
-    document.getElementById('total-count').textContent = filteredMeps.length;
+    
+    // Update total count display with breakdown
+    const currentCount = filteredMeps.filter(m => m.isCurrent).length;
+    const historicCount = filteredMeps.filter(m => !m.isCurrent).length;
+    const totalSpeeches = filteredMeps.reduce((sum, m) => sum + m.speechCount, 0);
+    
+    document.getElementById('total-count').textContent = 
+      `${filteredMeps.length} (${currentCount} current, ${historicCount} historic) - ${totalSpeeches} total speeches`;
+    
     // Update charts with filtered data
     updateCharts(filteredMeps);
     // Update table with filtered data
@@ -98,15 +115,30 @@ async function fetchPreview(date) {
     const mepsTbody = document.querySelector('#mepsTable tbody');
     // Get the MEPs to show for the current page
     const toShow = filteredMeps.slice(0, mepsPage * MEP_PAGE_SIZE);
-    // Render table rows
-    mepsTbody.innerHTML = toShow.map(m => `
-      <tr>
-        <td>${m.identifier}</td>
-        <td>${m.label}</td>
-        <td>${m['api:country-of-representation'] || ''}</td>
-        <td>${m['api:political-group'] || ''}</td>
-      </tr>
-    `).join('');
+    // Render table rows with View Speeches button
+    mepsTbody.innerHTML = toShow.map(m => {
+      const statusBadge = m.isCurrent 
+        ? '<span class="status-badge current">✅ Current</span>' 
+        : '<span class="status-badge historic">📜 Historic</span>';
+      const speechCountBadge = m.speechCount > 0 
+        ? `<span class="speech-count-badge">${m.speechCount} speeches</span>`
+        : '<span class="speech-count-badge zero">No speeches</span>';
+      return `
+        <tr class="mep-row" data-mep-id="${m.identifier}">
+          <td>${m.identifier}</td>
+          <td>${m.label}</td>
+          <td>${m['api:country-of-representation'] || ''}</td>
+          <td>${m['api:political-group'] || ''}</td>
+          <td>${statusBadge}</td>
+          <td>${speechCountBadge}</td>
+          <td>
+            <button class="view-speeches-btn" onclick="viewMepDetails(${m.identifier})" title="View all speeches by this MEP">
+              🎤 View Speeches
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
     // Show or hide the 'Show more' button
     if (filteredMeps.length > toShow.length) {
       showMoreBtn.style.display = '';
@@ -126,10 +158,69 @@ async function fetchPreview(date) {
   renderMepsTable();
   document.getElementById('total-count').textContent = filteredMeps.length;
   updateCharts(filteredMeps);
+  
+  // --- Historic MEP Linking functionality ---
+  const linkHistoricMepsBtn = document.getElementById('linkHistoricMepsBtn');
+  const linkingStatus = document.getElementById('linkingStatus');
+  
+  linkHistoricMepsBtn.addEventListener('click', async () => {
+    try {
+      linkHistoricMepsBtn.disabled = true;
+      linkHistoricMepsBtn.textContent = '🔄 Processing...';
+      linkingStatus.textContent = 'Creating historic MEPs and linking speeches...';
+      linkingStatus.style.color = 'var(--eu-blue)';
+      
+      const response = await fetch('/api/link-historic-meps', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        linkingStatus.textContent = `✅ Success! Created ${result.createdHistoricMeps} historic MEPs and linked ${result.linkedSpeeches} speeches.`;
+        linkingStatus.style.color = 'var(--eu-green)';
+        
+        // Refresh MEP data to show new historic MEPs
+        setTimeout(async () => {
+          const res = await fetch('/api/meps');
+          const json = await res.json();
+          mepsList = json.data || [];
+          filteredMeps = [...mepsList];
+          updateCharts(filteredMeps);
+          renderMepsTable();
+          document.getElementById('total-count').textContent = mepsList.length;
+        }, 2000);
+        
+      } else {
+        linkingStatus.textContent = `❌ Error: ${result.error}`;
+        linkingStatus.style.color = 'var(--eu-red)';
+      }
+      
+    } catch (error) {
+      console.error('Error linking historic MEPs:', error);
+      linkingStatus.textContent = `❌ Error: ${error.message}`;
+      linkingStatus.style.color = 'var(--eu-red)';
+    } finally {
+      linkHistoricMepsBtn.disabled = false;
+      linkHistoricMepsBtn.textContent = '🔗 Create Historic MEPs & Link Speeches';
+    }
+  });
 
   // --- Add filter event listeners ---
+  statusFilter.addEventListener('change', applyFilters);
   countryFilter.addEventListener('change', applyFilters);
   groupFilter.addEventListener('change', applyFilters);
+  speechCountFilter.addEventListener('change', applyFilters);
+
+  // --- Global function to view MEP details ---
+  window.viewMepDetails = function(mepId) {
+    console.log(`🔍 [FRONTEND] Opening MEP details for ID: ${mepId}`);
+    window.open(`/mep-details.html?id=${mepId}`, '_blank');
+  };
+
 
   // --- Update country and group charts ---
   function updateCharts(meps) {
@@ -222,7 +313,7 @@ async function fetchPreview(date) {
   // DOM elements for speeches
   const statsEl = document.getElementById('speech-count');
   const tbody = document.querySelector('#speechesTable tbody');
-  const loadMoreBtn = document.getElementById('loadMoreSpeeches');
+  const loadMoreBtn = document.getElementById('showMoreMeps');
 
   // --- Utility functions for speeches table ---
   // Shorten a URI to just the last part
@@ -378,4 +469,146 @@ async function fetchPreview(date) {
       loadSpeeches(mepSelect.value, true);
     }
   });
+})();
+
+// Refresh Button Functionality
+(function() {
+  const refreshBtn = document.getElementById('refreshDataBtn');
+  const refreshIcon = document.getElementById('refreshIcon');
+  const refreshText = document.getElementById('refreshText');
+  const cacheStatus = document.getElementById('cacheStatus');
+  const mepCountSpan = document.getElementById('mepCount');
+  const speechCountSpan = document.getElementById('speechCount');
+  const lastUpdatedSpan = document.getElementById('lastUpdated');
+  
+  let isRefreshing = false;
+  
+  // Load cache status on page load
+  async function loadCacheStatus() {
+    try {
+      console.log('🔄 [FRONTEND] Loading cache status...');
+      const response = await fetch('/api/cache-status');
+      const status = await response.json();
+      
+      console.log('📊 [FRONTEND] Cache status received:', status);
+      
+      mepCountSpan.textContent = status.meps_last_updated ? 'Cached' : 'Not cached';
+      speechCountSpan.textContent = status.total_speeches || 0;
+      
+      if (status.speeches_last_updated) {
+        const date = new Date(status.speeches_last_updated);
+        lastUpdatedSpan.textContent = date.toLocaleString();
+        console.log(`✅ [FRONTEND] Cache status loaded - MEPs: ${status.meps_last_updated ? 'Cached' : 'Not cached'}, Speeches: ${status.total_speeches}, Last updated: ${date.toLocaleString()}`);
+      } else {
+        lastUpdatedSpan.textContent = 'Never';
+        console.log('⚠️ [FRONTEND] No cache data found');
+      }
+    } catch (error) {
+      console.error('❌ [FRONTEND] Error loading cache status:', error);
+    }
+  }
+  
+  // Show/hide cache status
+  refreshBtn.addEventListener('mouseenter', () => {
+    cacheStatus.style.display = 'block';
+  });
+  
+  refreshBtn.addEventListener('mouseleave', () => {
+    cacheStatus.style.display = 'none';
+  });
+  
+  // Refresh data function
+  async function refreshAllData() {
+    if (isRefreshing) return;
+    
+    console.log('🔄 [FRONTEND] Starting data refresh...');
+    isRefreshing = true;
+    refreshIcon.textContent = '⏳';
+    refreshText.textContent = 'Refreshing...';
+    refreshBtn.disabled = true;
+    refreshBtn.style.opacity = '0.7';
+    
+    try {
+      console.log('📡 [FRONTEND] Sending perfect refresh request to server...');
+      const response = await fetch('/api/refresh-perfect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          startDate: '2023-01-01' // Default to 2023, can be made configurable
+        })
+      });
+      
+      const result = await response.json();
+      console.log('📊 [FRONTEND] Refresh response received:', result);
+      
+      if (result.success) {
+        refreshIcon.textContent = '✅';
+        refreshText.textContent = 'Refreshed!';
+        
+        console.log(`✅ [FRONTEND] Refresh successful - MEPs: ${result.meps_count}, Speeches: ${result.speeches_count}`);
+        
+        // Update cache status
+        await loadCacheStatus();
+        
+        // Show success message
+        showNotification(`Perfect refresh completed. Reloading data...`, 'success');
+        
+        // Reload the page to show updated data
+        setTimeout(() => {
+          console.log('🔄 [FRONTEND] Reloading page to show updated data...');
+          window.location.reload();
+        }, 2000);
+      } else {
+        throw new Error(result.error || 'Refresh failed');
+      }
+    } catch (error) {
+      console.error('❌ [FRONTEND] Error refreshing data:', error);
+      refreshIcon.textContent = '❌';
+      refreshText.textContent = 'Failed';
+      showNotification('Failed to refresh data: ' + error.message, 'error');
+    } finally {
+      setTimeout(() => {
+        isRefreshing = false;
+        refreshIcon.textContent = '🔄';
+        refreshText.textContent = 'Refresh Data';
+        refreshBtn.disabled = false;
+        refreshBtn.style.opacity = '1';
+      }, 3000);
+    }
+  }
+  
+  // Add click event listener
+  refreshBtn.addEventListener('click', refreshAllData);
+  
+  // Load initial cache status
+  loadCacheStatus();
+  
+  // Show notification function
+  function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: ${type === 'success' ? '#4CAF50' : type === 'error' ? '#f44336' : '#2196F3'};
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 1001;
+      font-size: 14px;
+      font-weight: 500;
+      max-width: 300px;
+      word-wrap: break-word;
+    `;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      notification.remove();
+    }, 5000);
+  }
 })();

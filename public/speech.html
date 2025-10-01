@@ -13,6 +13,9 @@
       <div class="speech-top-flex" style="flex-direction:row;align-items:stretch;gap:2.5rem;">
         <section id="aiSpeakerFinderSection">
           <h3>AI Speaker Finder</h3>
+          <button id="startAISpeakerFinderBtn" style="background:var(--eu-blue);color:white;border:none;padding:0.5rem 1rem;border-radius:4px;cursor:pointer;margin-bottom:1rem;">
+            🔍 Find Speakers with AI
+          </button>
           <div id="aiSpeakerFinderWindow" style="background:#f8f9fa;border-radius:6px;padding:1rem;min-height:40px;"></div>
         </section>
         <section id="speechMetaBox">
@@ -31,6 +34,9 @@
       </div>
       <section id="aiSummarySection">
         <h2>AI Summary</h2>
+        <button id="startAISummaryBtn" style="background:var(--eu-blue);color:white;border:none;padding:0.5rem 1rem;border-radius:4px;cursor:pointer;margin-bottom:1rem;">
+          🧠 Start AI Summary
+        </button>
         <div id="summaryProgress" style="display:none;margin-bottom:1rem;">
           <div style="display:flex;align-items:center;gap:1rem;">
             <span id="progressStatus"></span>
@@ -54,6 +60,12 @@
         <details>
           <summary>Show raw JSON</summary>
           <pre id="rawJson" style="background:#f8f9fa;padding:1rem;border-radius:6px;"></pre>
+        </details>
+      </section>
+      <section id="rawHtmlSection" style="margin-top:2rem;">
+        <details>
+          <summary>Show raw HTML content</summary>
+          <pre id="rawHtml" style="background:#f8f9fa;padding:1rem;border-radius:6px;max-height:400px;overflow-y:auto;white-space:pre-wrap;word-wrap:break-word;"></pre>
         </details>
       </section>
       <section id="speechContentSection" class="speech-content-section">

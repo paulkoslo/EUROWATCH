@@ -17,49 +17,72 @@ let allSpeeches = [];
 let currentSort = { column: 'date', direction: 'desc' };
 let dateFilter = { start: null, end: null };
 
-// Load from localStorage if available
-function loadSittingsFromStorage() {
-  const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
-  if (cached) {
-    try {
-      allSpeeches = JSON.parse(cached);
+// Load from database cache if available
+async function loadSittingsFromCache() {
+  try {
+    console.log('🎤 [FRONTEND] Loading speeches from database cache...');
+    const response = await fetch('/api/speeches?limit=10000'); // Get a large number to load all
+    const json = await response.json();
+    
+    console.log(`🎤 [FRONTEND] Received ${json.data ? json.data.length : 0} speeches from cache`);
+    
+    if (json.data && json.data.length > 0) {
+      allSpeeches = json.data;
+      console.log(`✅ [FRONTEND] Loaded ${allSpeeches.length} speeches from cache`);
+      console.log('🎤 [FRONTEND] Sample speech data:', allSpeeches[0]);
       renderTable();
       // Hide progress bar if present
       const barContainer = document.getElementById('speechesLoadingBarContainer');
       if (barContainer) barContainer.style.display = 'none';
       return true;
-    } catch (e) {
-      // If parsing fails, clear storage and fall back to fetch
-      localStorage.removeItem(LOCAL_STORAGE_KEY);
+    } else {
+      console.log('⚠️ [FRONTEND] No speeches found in cache');
     }
+  } catch (error) {
+    console.error('❌ [FRONTEND] Error loading speeches from cache:', error);
   }
   return false;
 }
 
-// Save to localStorage
+// Legacy localStorage functions for backward compatibility
+function loadSittingsFromStorage() {
+  return loadSittingsFromCache();
+}
+
 function saveSittingsToStorage() {
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(allSpeeches));
-  localStorage.setItem(LOCAL_STORAGE_DATE_KEY, Date.now());
+  // No longer needed since data is cached in database
+  console.log('Data is now cached in database, localStorage save not needed');
 }
 
 // Group speeches by date
 function groupSpeechesByDate(speeches) {
+  console.log('🎤 [FRONTEND] Grouping speeches:', speeches.length, 'speeches');
   const grouped = {};
-  speeches.forEach(speech => {
-    if (!speech.date) return;
+  speeches.forEach((speech, index) => {
+    // Use activity_date from API instead of date
+    const speechDate = speech.activity_date || speech.date;
+    if (!speechDate) {
+      console.log('⚠️ [FRONTEND] Speech without date:', speech);
+      return;
+    }
     // Apply date filter
-    if (dateFilter.start && speech.date < dateFilter.start) return;
-    if (dateFilter.end && speech.date > dateFilter.end) return;
+    if (dateFilter.start && speechDate < dateFilter.start) return;
+    if (dateFilter.end && speechDate > dateFilter.end) return;
     
-    if (!grouped[speech.date]) {
-      grouped[speech.date] = {
-        date: speech.date,
-        count: 0,
+    if (!grouped[speechDate]) {
+      grouped[speechDate] = {
+        date: speechDate,
+        count: speech.individual_speech_count || 0, // Use individual speech count from API
         id: speech.id // Keep the first speech ID for reference
       };
+      console.log(`🎤 [FRONTEND] Created group for ${speechDate} with count ${speech.individual_speech_count}`);
+    } else {
+      // If we already have this date, use the higher count (in case of duplicates)
+      grouped[speechDate].count = Math.max(grouped[speechDate].count, speech.individual_speech_count || 0);
+      console.log(`🎤 [FRONTEND] Updated group for ${speechDate} with count ${speech.individual_speech_count}`);
     }
-    grouped[speech.date].count++;
   });
+  console.log('🎤 [FRONTEND] Final grouped result:', Object.values(grouped));
   return Object.values(grouped);
 }
 
@@ -67,11 +90,15 @@ function groupSpeechesByDate(speeches) {
 function renderTable() {
   const tbody = document.querySelector('#newestSpeechesTable tbody');
   const groupedSpeeches = groupSpeechesByDate(allSpeeches);
+  console.log('🎤 [FRONTEND] Grouped speeches:', groupedSpeeches);
+  
   const data = groupedSpeeches.sort((a, b) => {
     const da = new Date(a.date);
     const db = new Date(b.date);
     return currentSort.direction === 'asc' ? da - db : db - da;
   });
+
+  console.log('🎤 [FRONTEND] Sorted data:', data);
 
   tbody.innerHTML = data.map(s => {
     return `
@@ -123,46 +150,80 @@ function setupDateFilter() {
   });
 }
 
-// Fetch all speeches in pages of 500 until we get them all
+// Load all speeches from database cache
 async function fetchAllSpeechesAndStore() {
   try {
+    console.log('🎤 [FRONTEND] Starting to load all speeches from cache...');
     const barContainer = document.getElementById('speechesLoadingBarContainer');
     const bar = document.getElementById('speechesLoadingBar');
     const percentSpan = document.getElementById('speechesLoadingPercent');
+    
     if (barContainer) barContainer.style.display = '';
     if (bar) bar.style.width = '0%';
     if (percentSpan) percentSpan.textContent = '0%';
-    const limit = 500;
-    // Fetch total count
-    const metaResp = await fetch('/api/speeches?limit=1');
-    const metaJson = await metaResp.json();
-    const total = (metaJson.meta && metaJson.meta.total) || 0;
-    allSpeeches = [];
-    for (let offset = 0; offset < total; offset += limit) {
-      const resp = await fetch(`/api/speeches?limit=${limit}&offset=${offset}`);
-      const json = await resp.json();
-      allSpeeches = allSpeeches.concat(json.data || []);
-      // Update bar and percent
-      if (bar && percentSpan) {
-        const percent = Math.min(100, Math.round((allSpeeches.length / total) * 100));
-        bar.style.width = percent + '%';
-        percentSpan.textContent = percent + '%';
-      }
+    
+    // Show loading progress
+    if (bar && percentSpan) {
+      bar.style.width = '50%';
+      percentSpan.textContent = '50%';
     }
+    
+    console.log('📡 [FRONTEND] Fetching speeches from cached database...');
+    // Fetch all speeches from cached database
+    const response = await fetch('/api/speeches?limit=50000'); // Large limit to get all
+    const json = await response.json();
+    
+    console.log(`📊 [FRONTEND] Received response with ${json.data ? json.data.length : 0} speeches`);
+    
+    if (json.data) {
+      allSpeeches = json.data;
+      console.log(`✅ [FRONTEND] Successfully loaded ${allSpeeches.length} speeches from cache`);
+      
+      // Complete progress bar
+      if (bar && percentSpan) {
+        bar.style.width = '100%';
+        percentSpan.textContent = '100%';
+      }
+      
+      renderTable();
+    } else {
+      throw new Error('No data received from API');
+    }
+    
     if (barContainer) barContainer.style.display = 'none';
-    saveSittingsToStorage();
-    renderTable();
   } catch (err) {
-    console.error('Error loading all speeches:', err);
+    console.error('❌ [FRONTEND] Error loading speeches from cache:', err);
     const barContainer = document.getElementById('speechesLoadingBarContainer');
-    if (barContainer) barContainer.innerHTML = '<span style="color:red">Failed to load speeches.</span>';
+    if (barContainer) {
+      barContainer.innerHTML = '<span style="color:red">Failed to load speeches from cache. Try refreshing the data.</span>';
+    }
   }
 }
 
 // Manual refresh handler
-function refreshSittings() {
-  localStorage.removeItem(LOCAL_STORAGE_KEY);
-  fetchAllSpeechesAndStore();
+async function refreshSittings() {
+  try {
+    // Clear any legacy cache
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    localStorage.removeItem(LOCAL_STORAGE_DATE_KEY);
+
+    // Trigger perfect refresh on server
+    const resp = await fetch('/api/refresh-perfect', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        startDate: '2023-01-01' // Default to 2023, can be made configurable
+      })
+    });
+    if (!resp.ok) throw new Error('Refresh failed');
+
+    // After backend completes, load from DB cache endpoint
+    await loadSittingsFromCache();
+  } catch (e) {
+    console.error('❌ [FRONTEND] Perfect refresh failed:', e);
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

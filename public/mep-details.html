@@ -1,0 +1,396 @@
+s get  <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MEP Details - EuroWatch</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .mep-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .mep-name {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        
+        .mep-info {
+            display: flex;
+            gap: 2rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+        
+        .mep-info-item {
+            background: rgba(255,255,255,0.1);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+        
+        .speeches-container {
+            background: white;
+            border-radius: 10px;
+            padding: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .speeches-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .speeches-count {
+            font-size: 1.2rem;
+            color: #666;
+        }
+        
+        .speech-item {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .speech-item:hover {
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        
+        .speech-header {
+            background: #f8f9fa;
+            padding: 1rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .speech-header:hover {
+            background: #e9ecef;
+        }
+        
+        .speech-meta {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        
+        .speech-date {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .speech-sitting {
+            color: #007bff;
+        }
+        
+        .speech-content {
+            padding: 1rem;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: none;
+            line-height: 1.6;
+        }
+        
+        .speech-content.expanded {
+            display: block;
+        }
+        
+        .expand-icon {
+            transition: transform 0.3s ease;
+            font-size: 1.2rem;
+        }
+        
+        .expand-icon.expanded {
+            transform: rotate(180deg);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 1rem;
+            border-radius: 5px;
+            margin: 1rem 0;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        
+        .pagination button {
+            padding: 0.5rem 1rem;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .pagination button:hover:not(:disabled) {
+            background: #f8f9fa;
+            border-color: #007bff;
+        }
+        
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .back-button {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 1rem;
+            transition: background 0.3s ease;
+        }
+        
+        .back-button:hover {
+            background: #5a6268;
+        }
+        
+        .no-speeches {
+            text-align: center;
+            padding: 3rem;
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <button class="back-button" onclick="goBack()">← Back to MEPs</button>
+        
+        <div id="loading" class="loading">
+            <h2>Loading MEP details...</h2>
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="mep-details" style="display: none;">
+            <div class="mep-header">
+                <div class="mep-name" id="mep-name"></div>
+                <div class="mep-info" id="mep-info"></div>
+            </div>
+            
+            <div class="speeches-container">
+                <div class="speeches-header">
+                    <h2>Parliamentary Speeches</h2>
+                    <div class="speeches-count" id="speeches-count"></div>
+                </div>
+                
+                <div id="speeches-list"></div>
+                
+                <div class="pagination" id="pagination" style="display: none;">
+                    <button id="prev-btn" onclick="loadPreviousPage()">Previous</button>
+                    <span id="page-info"></span>
+                    <button id="next-btn" onclick="loadNextPage()">Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentMepId = null;
+        let currentOffset = 0;
+        const limit = 20;
+        let totalSpeeches = 0;
+        let currentPage = 1;
+        const totalPages = Math.ceil(totalSpeeches / limit);
+
+        // Get MEP ID from URL
+        function getMepIdFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('id');
+        }
+
+        // Load MEP details and speeches
+        async function loadMepDetails() {
+            currentMepId = getMepIdFromUrl();
+            if (!currentMepId) {
+                showError('No MEP ID provided');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/meps/${currentMepId}/speeches?limit=${limit}&offset=${currentOffset}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                displayMepDetails(data);
+                displaySpeeches(data.speeches);
+                updatePagination(data.pagination);
+                
+            } catch (error) {
+                console.error('Error loading MEP details:', error);
+                showError(`Failed to load MEP details: ${error.message}`);
+            }
+        }
+
+        // Display MEP information
+        function displayMepDetails(data) {
+            const mep = data.mep;
+            
+            document.getElementById('mep-name').textContent = `${mep.givenName} ${mep.familyName}`;
+            
+            const mepInfo = document.getElementById('mep-info');
+            mepInfo.innerHTML = `
+                <div class="mep-info-item">🇪🇺 ${mep.country}</div>
+                <div class="mep-info-item">🏛️ ${mep.politicalGroup}</div>
+                <div class="mep-info-item">👤 ${mep.label}</div>
+            `;
+            
+            document.getElementById('speeches-count').textContent = `${data.pagination.total} speeches`;
+            
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('mep-details').style.display = 'block';
+        }
+
+        // Display speeches list
+        function displaySpeeches(speeches) {
+            const speechesList = document.getElementById('speeches-list');
+            
+            if (speeches.length === 0) {
+                speechesList.innerHTML = '<div class="no-speeches">No speeches found for this MEP.</div>';
+                return;
+            }
+            
+            speechesList.innerHTML = speeches.map(speech => `
+                <div class="speech-item">
+                    <div class="speech-header" onclick="toggleSpeech(${speech.id})">
+                        <div>
+                            <div class="speech-meta">
+                                <span class="speech-date">${formatDate(speech.date)}</span>
+                                <span class="speech-sitting">${speech.sitting_title}</span>
+                                ${speech.political_group ? `<span>${speech.political_group}</span>` : ''}
+                                ${speech.title ? `<span>${speech.title}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="expand-icon" id="icon-${speech.id}">▼</div>
+                    </div>
+                    <div class="speech-content" id="content-${speech.id}">
+                        ${formatSpeechContent(speech.speech_content)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Toggle speech content visibility
+        function toggleSpeech(speechId) {
+            const content = document.getElementById(`content-${speechId}`);
+            const icon = document.getElementById(`icon-${speechId}`);
+            
+            if (content.classList.contains('expanded')) {
+                content.classList.remove('expanded');
+                icon.classList.remove('expanded');
+            } else {
+                content.classList.add('expanded');
+                icon.classList.add('expanded');
+            }
+        }
+
+        // Format date
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+
+        // Format speech content
+        function formatSpeechContent(content) {
+            if (!content) return '<em>No content available</em>';
+            
+            // Basic HTML escaping and formatting
+            return content
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\n/g, '<br>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>');
+        }
+
+        // Update pagination
+        function updatePagination(pagination) {
+            totalSpeeches = pagination.total;
+            currentPage = Math.floor(currentOffset / limit) + 1;
+            const totalPages = Math.ceil(totalSpeeches / limit);
+            
+            const paginationDiv = document.getElementById('pagination');
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            const pageInfo = document.getElementById('page-info');
+            
+            if (totalPages <= 1) {
+                paginationDiv.style.display = 'none';
+                return;
+            }
+            
+            paginationDiv.style.display = 'flex';
+            prevBtn.disabled = currentOffset === 0;
+            nextBtn.disabled = !pagination.hasMore;
+            pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+        }
+
+        // Load previous page
+        function loadPreviousPage() {
+            if (currentOffset > 0) {
+                currentOffset = Math.max(0, currentOffset - limit);
+                loadMepDetails();
+            }
+        }
+
+        // Load next page
+        function loadNextPage() {
+            currentOffset += limit;
+            loadMepDetails();
+        }
+
+        // Show error message
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').textContent = message;
+            document.getElementById('error').style.display = 'block';
+        }
+
+        // Go back to MEPs page
+        function goBack() {
+            window.location.href = '/';
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', loadMepDetails);
+    </script>
+</body>
+</html>

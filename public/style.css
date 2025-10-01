@@ -47,6 +47,79 @@ body {
   transform: scale(1.05);
 }
 
+/* MEP Table Row Styling */
+.mep-row {
+  transition: all 0.3s ease;
+}
+
+.mep-row:hover {
+  background-color: var(--eu-gray-100) !important;
+}
+
+/* Status Badge Styling */
+.status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: center;
+  min-width: 70px;
+}
+
+.status-badge.current {
+  background-color: var(--eu-green);
+  color: white;
+}
+
+.status-badge.historic {
+  background-color: var(--eu-gray-500);
+  color: white;
+}
+
+/* Speech Count Badge Styling */
+.speech-count-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: center;
+  min-width: 80px;
+  background-color: var(--eu-blue);
+  color: white;
+}
+
+.speech-count-badge.zero {
+  background-color: var(--eu-gray-300);
+  color: var(--eu-gray-700);
+}
+
+/* View Speeches Button Styling */
+.view-speeches-btn {
+  background: linear-gradient(135deg, var(--eu-blue) 0%, #4f46e5 100%);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.view-speeches-btn:hover {
+  background: linear-gradient(135deg, #002d7a 0%, #3730a3 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.view-speeches-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
 /* Typography */
 h1, h2, h3, h4, h5, h6 {
   color: var(--eu-blue);
@@ -218,16 +291,44 @@ input[type="date"]:focus {
 
 /* Filters */
 .filters-container {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
   margin-bottom: 2rem;
-  flex-wrap: wrap;
+  padding: 1.5rem;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid var(--eu-blue);
 }
 
 .filter-group {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 0.5rem;
+}
+
+.filter-group label {
+  font-weight: 600;
+  color: var(--eu-gray-700);
+  font-size: 0.875rem;
+}
+
+.filter-group select {
+  padding: 0.5rem;
+  border: 1px solid var(--eu-gray-300);
+  border-radius: 4px;
+  background-color: white;
+  color: var(--eu-gray-800);
+  font-size: 0.875rem;
+  min-width: 150px;
+  transition: border-color 0.2s ease;
+}
+
+.filter-group select:focus {
+  outline: none;
+  border-color: var(--eu-blue);
+  box-shadow: 0 0 0 2px rgba(0, 51, 153, 0.2);
 }
 
 select {
