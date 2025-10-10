@@ -11,6 +11,18 @@ const API_BASE = 'https://data.europarl.europa.eu/api/v2';
 const dbFile = path.join(__dirname, 'ep_data.db');
 const db = new sqlite3.Database(dbFile);
 
+// Analytics cache
+const analyticsCache = {
+  data: null,
+  lastUpdated: null,
+  isWarming: false,
+  progress: {
+    stage: '',
+    percent: 0,
+    message: ''
+  }
+};
+
 // Progress bar utility
 function createProgressBar(current, total, width = 50) {
   const percentage = Math.round((current / total) * 100);
@@ -1180,6 +1192,824 @@ if (process.argv.includes('--parse-recent-speeches')) {
       }
     });
 
+    // =============================================
+    // Analytics Endpoints
+    // =============================================
+    // GET /api/analytics/overview
+    app.get('/api/analytics/overview', (req, res) => {
+      // Serve from cache if available
+      if (analyticsCache.data) {
+        console.log('⚡ [CACHE] Served overview from cache');
+        return res.json(analyticsCache.data.overview);
+      }
+      
+      const topLimit = parseInt(req.query.limit, 10) || 20;
+      const trendMonths = parseInt(req.query.months, 10) || 12;
+
+      const result = { coverage: {}, macroTopicDistribution: [], topSpecificFocus: [], trendsMonthly: [] };
+
+      // 1) Coverage
+      db.get(`
+        SELECT 
+          COUNT(*) AS total,
+          SUM(CASE WHEN macro_topic IS NOT NULL AND TRIM(macro_topic) <> '' THEN 1 ELSE 0 END) AS with_macro
+        FROM individual_speeches
+      `, [], (err1, cov) => {
+        if (err1) return res.status(500).json({ error: err1.message });
+        const total = cov?.total || 0;
+        const withMacro = cov?.with_macro || 0;
+        const pct = total ? Math.round((withMacro / total) * 1000) / 10 : 0;
+        result.coverage = { total, with_macro: withMacro, pct_with_macro: pct };
+
+        // 2) Macro Topic Distribution (top N)
+        db.all(`
+          SELECT macro_topic AS topic, COUNT(*) AS count
+          FROM individual_speeches
+          WHERE macro_topic IS NOT NULL AND TRIM(macro_topic) <> ''
+          GROUP BY macro_topic
+          ORDER BY count DESC
+          LIMIT ?
+        `, [topLimit], (err2, rowsTopic) => {
+          if (err2) return res.status(500).json({ error: err2.message });
+          result.macroTopicDistribution = rowsTopic || [];
+
+          // 3) Top Specific Focus (overall top N)
+          db.all(`
+            SELECT macro_topic AS topic, macro_specific_focus AS focus, COUNT(*) AS count
+            FROM individual_speeches
+            WHERE macro_topic IS NOT NULL AND TRIM(macro_topic) <> ''
+              AND macro_specific_focus IS NOT NULL AND TRIM(macro_specific_focus) <> ''
+            GROUP BY macro_topic, macro_specific_focus
+            ORDER BY count DESC
+            LIMIT ?
+          `, [topLimit], (err3, rowsFocus) => {
+            if (err3) return res.status(500).json({ error: err3.message });
+            result.topSpecificFocus = rowsFocus || [];
+
+            // 4) Trends for last X months for top 5 topics
+            const top5 = (rowsTopic || []).slice(0, 5).map(r => r.topic).filter(Boolean);
+            if (top5.length === 0) return res.json(result);
+
+            // Build monthly trend and then trim to last N months
+            const placeholders = top5.map(() => '?').join(',');
+            db.all(`
+              SELECT substr(s.activity_date, 1, 7) AS ym, i.macro_topic AS topic, COUNT(*) AS count
+              FROM individual_speeches i
+              JOIN sittings s ON s.id = i.sitting_id
+              WHERE i.macro_topic IN (${placeholders})
+                AND s.activity_date IS NOT NULL
+              GROUP BY ym, i.macro_topic
+              ORDER BY ym ASC
+            `, top5, (err4, rowsTrend) => {
+              if (err4) return res.status(500).json({ error: err4.message });
+              // Keep only last N months
+              const months = Array.from(new Set((rowsTrend || []).map(r => r.ym))).sort();
+              const lastMonths = months.slice(-trendMonths);
+              result.trendsMonthly = (rowsTrend || []).filter(r => lastMonths.includes(r.ym));
+              res.json(result);
+            });
+          });
+        });
+      });
+    });
+
+    // Helper function to normalize topic names (remove HTML entities, normalize dashes)
+    const normalizeTopic = (topic) => {
+      if (!topic) return topic;
+      let normalized = topic
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+      
+      // Normalize ALL types of dashes, hyphens, and minus signs to regular hyphen-minus
+      // U+2010 to U+2015: various dashes
+      // U+2011: non-breaking hyphen  
+      // U+2013: en-dash
+      // U+2014: em-dash (the —)
+      // U+2212: minus sign
+      normalized = normalized.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g, '-');
+      
+      return normalized.trim();
+    };
+
+    // Function to warm up analytics cache
+    async function warmAnalyticsCache() {
+      if (analyticsCache.isWarming) {
+        console.log('⚠️ Cache warming already in progress');
+        return;
+      }
+
+      analyticsCache.isWarming = true;
+      analyticsCache.progress = { stage: 'Starting', percent: 0, message: 'Initializing analytics cache...' };
+      console.log('🔄 [CACHE] Starting analytics cache warming...');
+      
+      const cacheData = {};
+      
+      try {
+        // Step 1: Get all normalized topics (10%)
+        analyticsCache.progress = { stage: 'topics', percent: 10, message: 'Loading topics...' };
+        console.log('📊 [CACHE] Step 1/6: Loading topics');
+        
+        const allTopicsRows = await new Promise((resolve, reject) => {
+          db.all(`
+            SELECT DISTINCT i.macro_topic AS topic
+            FROM individual_speeches i
+            JOIN sittings s ON s.id = i.sitting_id
+            WHERE s.activity_date IS NOT NULL
+              AND i.macro_topic IS NOT NULL AND TRIM(i.macro_topic)<>''
+          `, [], (err, rows) => err ? reject(err) : resolve(rows));
+        });
+        
+        const rawTopics = allTopicsRows.map(r => r.topic);
+        const normalizedMap = new Map();
+        rawTopics.forEach(topic => {
+          const normalized = normalizeTopic(topic);
+          if (!normalizedMap.has(normalized)) {
+            normalizedMap.set(normalized, [topic]);
+          } else {
+            normalizedMap.get(normalized).push(topic);
+          }
+        });
+        const allTopics = Array.from(normalizedMap.keys());
+        cacheData.allTopics = allTopics;
+        cacheData.topicVariants = normalizedMap;
+        console.log(`✅ [CACHE] Found ${allTopics.length} unique topics`);
+        
+        // Step 2: Pre-compute time series for ALL topics (monthly and quarterly) (40%)
+        analyticsCache.progress = { stage: 'timeseries', percent: 25, message: 'Computing time series data...' };
+        console.log('📊 [CACHE] Step 2/6: Computing time series');
+        
+        for (const interval of ['month', 'quarter']) {
+          const periodExpr = interval === 'month' 
+            ? `substr(s.activity_date,1,7)` 
+            : `substr(s.activity_date,1,4) || '-Q' || ((cast(substr(s.activity_date,6,2) as integer)+2)/3)`;
+          
+          // Get all variants for SQL
+          const allVariants = Array.from(normalizedMap.values()).flat();
+          const placeholders = allVariants.map(() => '?').join(',');
+          
+          const [dataRows, periodRows] = await Promise.all([
+            new Promise((resolve, reject) => {
+              db.all(`
+                SELECT ${periodExpr} AS period, i.macro_topic AS topic, COUNT(*) AS cnt
+                FROM individual_speeches i
+                JOIN sittings s ON s.id = i.sitting_id
+                WHERE s.activity_date IS NOT NULL AND i.macro_topic IN (${placeholders})
+                GROUP BY period, i.macro_topic
+                ORDER BY period ASC
+              `, allVariants, (err, rows) => err ? reject(err) : resolve(rows));
+            }),
+            new Promise((resolve, reject) => {
+              db.all(`
+                SELECT DISTINCT ${periodExpr} AS period
+                FROM individual_speeches i
+                JOIN sittings s ON s.id = i.sitting_id
+                WHERE s.activity_date IS NOT NULL
+                ORDER BY period ASC
+              `, [], (err, rows) => err ? reject(err) : resolve(rows));
+            })
+          ]);
+          
+          const labels = periodRows.map(r => r.period);
+          
+          // 🚀 OPTIMIZATION: Pre-index data by topic|period for O(1) lookups
+          const dataIndex = new Map();
+          dataRows.forEach(row => {
+            const key = `${row.topic}|${row.period}`;
+            dataIndex.set(key, (dataIndex.get(key) || 0) + row.cnt);
+          });
+          
+          // Now this is FAST - O(1) lookups instead of O(n) filters!
+          const datasets = allTopics.map(normalizedTopic => {
+            const variants = normalizedMap.get(normalizedTopic) || [];
+            return {
+              label: normalizedTopic,
+              data: labels.map(p => {
+                // Sum counts for all variants using O(1) Map lookups
+                return variants.reduce((sum, variant) => {
+                  const key = `${variant}|${p}`;
+                  return sum + (dataIndex.get(key) || 0);
+                }, 0);
+              })
+            };
+          });
+          
+          cacheData[`timeseries_${interval}`] = { labels, datasets, topics: allTopics };
+          console.log(`✅ [CACHE] Computed ${interval} time series: ${labels.length} periods, ${allTopics.length} topics`);
+        }
+        
+        analyticsCache.progress = { stage: 'timeseries', percent: 40, message: 'Time series computed' };
+        
+        // Step 3: Pre-compute by-group data (60%)
+        analyticsCache.progress = { stage: 'groups', percent: 50, message: 'Computing political groups data...' };
+        console.log('📊 [CACHE] Step 3/6: Computing by-group');
+        
+        // Use ALL topics (not just top 10) for comprehensive filtering
+        const topTopicsForGroups = allTopics;
+        
+        const [groups, groupRows] = await Promise.all([
+          new Promise((resolve, reject) => {
+            db.all(`
+              SELECT COALESCE(political_group_std, political_group) AS grp, COUNT(*) AS cnt
+              FROM individual_speeches
+              WHERE COALESCE(political_group_std, political_group) IS NOT NULL 
+                AND TRIM(COALESCE(political_group_std, political_group))<>''
+              GROUP BY grp
+              ORDER BY cnt DESC LIMIT 10
+            `, [], (err, rows) => err ? reject(err) : resolve(rows));
+          })
+        ]);
+        
+        const groupsList = groups.map(r => r.grp);
+        
+        const allTopicVariantsForGroups = Array.from(new Set(
+          topTopicsForGroups.flatMap(t => normalizedMap.get(t) || [])
+        ));
+        
+        const groupDataRows = await new Promise((resolve, reject) => {
+          const pT = allTopicVariantsForGroups.map(() => '?').join(',');
+          const pG = groupsList.map(() => '?').join(',');
+          db.all(`
+            SELECT i.macro_topic AS topic, COALESCE(i.political_group_std, i.political_group) AS grp, COUNT(*) AS cnt
+            FROM individual_speeches i
+            WHERE i.macro_topic IN (${pT})
+              AND COALESCE(i.political_group_std, i.political_group) IN (${pG})
+            GROUP BY i.macro_topic, COALESCE(i.political_group_std, i.political_group)
+          `, [...allTopicVariantsForGroups, ...groupsList], (err, rows) => err ? reject(err) : resolve(rows));
+        });
+        
+        // Normalize the rows to use normalized topic names for easier filtering
+        const normalizedGroupRows = groupDataRows.map(row => ({
+          ...row,
+          topic: normalizeTopic(row.topic)
+        }));
+        
+        cacheData.byGroup = { topics: topTopicsForGroups, groups: groupsList, rows: normalizedGroupRows, topicVariants: normalizedMap };
+        console.log(`✅ [CACHE] Computed by-group: ${topTopicsForGroups.length} topics × ${groupsList.length} groups`);
+        analyticsCache.progress = { stage: 'groups', percent: 60, message: 'Political groups computed' };
+        
+        // Step 4: Pre-compute by-country data (75%)
+        analyticsCache.progress = { stage: 'countries', percent: 65, message: 'Computing countries data...' };
+        console.log('📊 [CACHE] Step 4/6: Computing by-country');
+        
+        // Use ALL topics (not just top 10) for comprehensive filtering
+        const topTopicsForCountries = allTopics;
+        
+        const [countries] = await Promise.all([
+          new Promise((resolve, reject) => {
+            db.all(`
+              SELECT m.country AS country, COUNT(*) AS cnt
+              FROM individual_speeches i
+              LEFT JOIN meps m ON m.id = i.mep_id
+              GROUP BY m.country
+              ORDER BY cnt DESC LIMIT 20
+            `, [], (err, rows) => err ? reject(err) : resolve(rows));
+          })
+        ]);
+        
+        const countriesList = countries.map(r => r.country).filter(Boolean);
+        
+        const allTopicVariantsForCountries = Array.from(new Set(
+          topTopicsForCountries.flatMap(t => normalizedMap.get(t) || [])
+        ));
+        
+        const countryDataRows = await new Promise((resolve, reject) => {
+          const pT = allTopicVariantsForCountries.map(() => '?').join(',');
+          const pC = countriesList.map(() => '?').join(',');
+          db.all(`
+            SELECT i.macro_topic AS topic, m.country AS country, COUNT(*) AS cnt
+            FROM individual_speeches i
+            LEFT JOIN meps m ON m.id = i.mep_id
+            WHERE i.macro_topic IN (${pT})
+              AND m.country IN (${pC})
+            GROUP BY i.macro_topic, m.country
+          `, [...allTopicVariantsForCountries, ...countriesList], (err, rows) => err ? reject(err) : resolve(rows));
+        });
+        
+        // Normalize the rows to use normalized topic names for easier filtering
+        const normalizedCountryRows = countryDataRows.map(row => ({
+          ...row,
+          topic: normalizeTopic(row.topic)
+        }));
+        
+        cacheData.byCountry = { topics: topTopicsForCountries, countries: countriesList, rows: normalizedCountryRows, topicVariants: normalizedMap };
+        console.log(`✅ [CACHE] Computed by-country: ${topTopicsForCountries.length} topics × ${countriesList.length} countries`);
+        analyticsCache.progress = { stage: 'countries', percent: 75, message: 'Countries computed' };
+        
+        // Step 5: Pre-compute languages (85%)
+        analyticsCache.progress = { stage: 'languages', percent: 80, message: 'Computing languages...' };
+        console.log('📊 [CACHE] Step 5/6: Computing languages');
+        
+        const languageRows = await new Promise((resolve, reject) => {
+          db.all(`
+            SELECT UPPER(COALESCE(language,'UNK')) AS language, COUNT(*) AS cnt
+            FROM individual_speeches
+            GROUP BY UPPER(COALESCE(language,'UNK'))
+            ORDER BY cnt DESC
+          `, [], (err, rows) => err ? reject(err) : resolve(rows));
+        });
+        
+        cacheData.languages = { rows: languageRows };
+        console.log(`✅ [CACHE] Computed languages: ${languageRows.length} languages`);
+        analyticsCache.progress = { stage: 'languages', percent: 85, message: 'Languages computed' };
+        
+        // Step 6: Pre-compute overview data (95%)
+        analyticsCache.progress = { stage: 'overview', percent: 90, message: 'Computing overview...' };
+        console.log('📊 [CACHE] Step 6/6: Computing overview');
+        
+        const [coverage, macroTopics, specificFocus] = await Promise.all([
+          new Promise((resolve, reject) => {
+            db.get(`
+              SELECT 
+                COUNT(*) AS total,
+                SUM(CASE WHEN macro_topic IS NOT NULL AND TRIM(macro_topic) <> '' THEN 1 ELSE 0 END) AS with_macro
+              FROM individual_speeches
+            `, [], (err, row) => err ? reject(err) : resolve(row));
+          }),
+          new Promise((resolve, reject) => {
+            db.all(`
+              SELECT macro_topic AS topic, COUNT(*) AS count
+              FROM individual_speeches
+              WHERE macro_topic IS NOT NULL AND TRIM(macro_topic) <> ''
+              GROUP BY macro_topic
+              ORDER BY count DESC LIMIT 20
+            `, [], (err, rows) => err ? reject(err) : resolve(rows));
+          }),
+          new Promise((resolve, reject) => {
+            db.all(`
+              SELECT macro_topic AS topic, macro_specific_focus AS focus, COUNT(*) AS count
+              FROM individual_speeches
+              WHERE macro_topic IS NOT NULL AND TRIM(macro_topic) <> ''
+                AND macro_specific_focus IS NOT NULL AND TRIM(macro_specific_focus) <> ''
+              GROUP BY macro_topic, macro_specific_focus
+              ORDER BY count DESC LIMIT 20
+            `, [], (err, rows) => err ? reject(err) : resolve(rows));
+          })
+        ]);
+        
+        const total = coverage?.total || 0;
+        const withMacro = coverage?.with_macro || 0;
+        const pct = total ? Math.round((withMacro / total) * 1000) / 10 : 0;
+        
+        cacheData.overview = {
+          coverage: { total, with_macro: withMacro, pct_with_macro: pct },
+          macroTopicDistribution: macroTopics,
+          topSpecificFocus: specificFocus
+        };
+        
+        console.log(`✅ [CACHE] Computed overview`);
+        
+        // Done!
+        analyticsCache.data = cacheData;
+        analyticsCache.lastUpdated = new Date().toISOString();
+        analyticsCache.progress = { stage: 'complete', percent: 100, message: 'Cache ready!' };
+        analyticsCache.isWarming = false;
+        
+        console.log('✅ [CACHE] Analytics cache warming completed successfully!');
+        console.log(`📊 [CACHE] Cached: ${allTopics.length} topics, ${cacheData.timeseries_month.labels.length} periods`);
+        
+      } catch (error) {
+        console.error('❌ [CACHE] Error warming cache:', error);
+        analyticsCache.isWarming = false;
+        analyticsCache.progress = { stage: 'error', percent: 0, message: 'Cache warming failed: ' + error.message };
+      }
+    }
+
+    // Cache status endpoint
+    app.get('/api/analytics/cache-status', (req, res) => {
+      res.json({
+        ready: analyticsCache.data !== null,
+        warming: analyticsCache.isWarming,
+        lastUpdated: analyticsCache.lastUpdated,
+        progress: analyticsCache.progress
+      });
+    });
+
+    // GET /api/analytics/time-series?interval=month&from=YYYY-MM&to=YYYY-MM&top=5
+    app.get('/api/analytics/time-series', (req, res) => {
+      const startTime = Date.now();
+      const interval = (req.query.interval || 'month').toLowerCase();
+      
+      // Serve from cache if available
+      if (analyticsCache.data) {
+        const cached = analyticsCache.data[`timeseries_${interval}`];
+        if (cached) {
+          const totalTime = Date.now() - startTime;
+          console.log(`⚡ [CACHE] Served time-series from cache in ${totalTime}ms`);
+          return res.json(cached);
+        }
+      }
+      const from = req.query.from || null; // 'YYYY-MM' or 'YYYY'
+      const to = req.query.to || null;     // 'YYYY-MM' or 'YYYY'
+      const top = req.query.top ? Math.max(1, parseInt(req.query.top, 10) || 1) : null; // if missing => ALL
+      const returnAll = String(req.query.all || '').toLowerCase() === 'true' || req.query.all === '1';
+      // topics can be CSV or JSON array
+      let topicsFilter = null;
+      if (req.query.topics) {
+        try {
+          topicsFilter = Array.isArray(req.query.topics)
+            ? req.query.topics
+            : (String(req.query.topics).trim().startsWith('[')
+                ? JSON.parse(String(req.query.topics))
+                : String(req.query.topics).split(',').map(s => s.trim()).filter(Boolean));
+        } catch (_) { topicsFilter = null; }
+      }
+
+      let periodExpr = `substr(s.activity_date,1,7)`; // month
+      if (interval === 'year') periodExpr = `substr(s.activity_date,1,4)`;
+      if (interval === 'quarter') periodExpr = `substr(s.activity_date,1,4) || '-Q' || ((cast(substr(s.activity_date,6,2) as integer)+2)/3)`;
+
+      const where = ['s.activity_date IS NOT NULL'];
+      const params = [];
+      if (from) { where.push(`${periodExpr} >= ?`); params.push(from); }
+      if (to) { where.push(`${periodExpr} <= ?`); params.push(to); }
+
+      const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+
+      const useTopics = async (topics) => {
+        // For SQL query, we need to match both normalized and original forms
+        // Get all distinct macro topics from the database
+        const allTopicsSql = `
+          SELECT DISTINCT i.macro_topic AS topic
+          FROM individual_speeches i
+          JOIN sittings s ON s.id = i.sitting_id
+          ${whereSql}
+          AND i.macro_topic IS NOT NULL AND TRIM(i.macro_topic)<>''
+        `;
+        db.all(allTopicsSql, params, (errAllTopics, allTopicsRows) => {
+          if (errAllTopics) return res.status(500).json({ error: errAllTopics.message });
+          
+          // Map normalized topics to all their variants in DB
+          const topicVariants = new Map();
+          topics.forEach(normalizedTopic => {
+            const variants = allTopicsRows
+              .filter(row => normalizeTopic(row.topic) === normalizedTopic)
+              .map(row => row.topic);
+            topicVariants.set(normalizedTopic, variants);
+          });
+          
+          // Flatten all variants for the SQL query
+          const allVariants = Array.from(topicVariants.values()).flat();
+          if (allVariants.length === 0) {
+            return res.json({ labels: [], datasets: [], topics });
+          }
+          
+          const placeholders = allVariants.map(()=>'?').join(',');
+          const params2 = [...params, ...allVariants];
+          const sql = `
+            SELECT ${periodExpr} AS period, i.macro_topic AS topic, COUNT(*) AS cnt
+            FROM individual_speeches i
+            JOIN sittings s ON s.id = i.sitting_id
+            ${whereSql} AND i.macro_topic IN (${placeholders})
+            GROUP BY period, i.macro_topic
+            ORDER BY period ASC
+          `;
+          db.all(sql, params2, (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            // Get all periods from the entire database to ensure full timeline
+            const allPeriodsSql = `
+              SELECT DISTINCT ${periodExpr} AS period
+              FROM individual_speeches i
+              JOIN sittings s ON s.id = i.sitting_id
+              WHERE s.activity_date IS NOT NULL
+              ORDER BY period ASC
+            `;
+            db.all(allPeriodsSql, [], (errPeriods, periodRows) => {
+              if (errPeriods) return res.status(500).json({ error: errPeriods.message });
+              
+              // Use ALL periods from database for complete timeline
+              const labels = (periodRows || []).map(r => r.period);
+              
+              // Aggregate counts by normalized topic
+              const datasets = topics.map(normalizedTopic => {
+                const variants = topicVariants.get(normalizedTopic) || [];
+                return {
+                  label: normalizedTopic,
+                  data: labels.map(p => {
+                    // Sum counts for all variants of this normalized topic
+                    const matchingRows = rows.filter(x => 
+                      x.period === p && variants.includes(x.topic)
+                    );
+                    return matchingRows.reduce((sum, r) => sum + r.cnt, 0);
+                  })
+                };
+              });
+              const totalTime = Date.now() - startTime;
+              console.log(`⏱️ [SERVER] /api/analytics/time-series completed in ${totalTime}ms (${topics.length} topics, ${labels.length} periods)`);
+              res.json({ labels, datasets, topics });
+            });
+          });
+        });
+      };
+
+      if (topicsFilter && topicsFilter.length) {
+        return useTopics(topicsFilter);
+      }
+
+      // 1) Determine topics (either ALL in range, or top N)
+      const topicSqlAll = `
+        SELECT DISTINCT i.macro_topic AS topic
+        FROM individual_speeches i
+        JOIN sittings s ON s.id = i.sitting_id
+        ${whereSql}
+        AND i.macro_topic IS NOT NULL AND TRIM(i.macro_topic)<>''
+      `;
+      const topicSqlTop = `
+        SELECT i.macro_topic AS topic, COUNT(*) AS cnt
+        FROM individual_speeches i
+        JOIN sittings s ON s.id = i.sitting_id
+        ${whereSql}
+        AND i.macro_topic IS NOT NULL AND TRIM(i.macro_topic)<>''
+        GROUP BY i.macro_topic
+        ORDER BY cnt DESC
+        LIMIT ${top || 50}
+      `;
+
+      db.all(returnAll || !top ? topicSqlAll : topicSqlTop, params, (errTop, rows) => {
+        if (errTop) return res.status(500).json({ error: errTop.message });
+        // Normalize and deduplicate topics
+        const rawTopics = (rows||[]).map(r => r.topic).filter(Boolean);
+        const normalizedMap = new Map();
+        rawTopics.forEach(topic => {
+          const normalized = normalizeTopic(topic);
+          if (!normalizedMap.has(normalized)) {
+            normalizedMap.set(normalized, topic); // Keep first occurrence
+          }
+        });
+        const topics = Array.from(normalizedMap.keys());
+        if (topics.length === 0) return res.json({ labels: [], datasets: [] });
+        return useTopics(topics);
+      });
+    });
+
+    // GET /api/analytics/by-group?topTopics=10&topGroups=10&topics=...
+    app.get('/api/analytics/by-group', (req, res) => {
+      // Check if specific topics are requested
+      let topicsFilter = null;
+      if (req.query.topics) {
+        try {
+          topicsFilter = Array.isArray(req.query.topics)
+            ? req.query.topics
+            : (String(req.query.topics).trim().startsWith('[')
+                ? JSON.parse(String(req.query.topics))
+                : String(req.query.topics).split(',').map(s => s.trim()).filter(Boolean));
+        } catch (_) { topicsFilter = null; }
+      }
+      
+      // Serve from cache (with optional filtering)
+      if (analyticsCache.data) {
+        const cached = analyticsCache.data.byGroup;
+        
+        if (!topicsFilter || topicsFilter.length === 0) {
+          // No filter - return full cache
+          console.log('⚡ [CACHE] Served by-group from cache (all topics)');
+          return res.json(cached);
+        }
+        
+        // Filter cached data by selected topics (rows are already normalized)
+        const filteredRows = cached.rows.filter(row => 
+          topicsFilter.includes(row.topic)
+        );
+        
+        const filteredTopics = topicsFilter.filter(t => 
+          cached.topics.includes(t)
+        );
+        
+        console.log(`⚡ [CACHE] Served by-group from cache (filtered to ${filteredTopics.length} topics)`);
+        return res.json({
+          topics: filteredTopics,
+          groups: cached.groups,
+          rows: filteredRows
+        });
+      }
+      
+      // Fallback to database if cache not ready
+      const topTopics = Math.max(1, parseInt(req.query.topTopics, 10) || 10);
+      const topGroups = Math.max(1, parseInt(req.query.topGroups, 10) || 10);
+      
+      const processWithTopics = (topics) => {
+        // top groups
+        db.all(`
+          SELECT COALESCE(political_group_std, political_group) AS grp, COUNT(*) AS cnt
+          FROM individual_speeches
+          WHERE COALESCE(political_group_std, political_group) IS NOT NULL AND TRIM(COALESCE(political_group_std, political_group))<>''
+          GROUP BY grp
+          ORDER BY cnt DESC
+          LIMIT ?
+        `, [topGroups], (e2, grows) => {
+          if (e2) return res.status(500).json({ error: e2.message });
+          const groups = (grows||[]).map(r=>r.grp);
+          const placeholdersT = topics.map(()=>'?').join(',');
+          const placeholdersG = groups.map(()=>'?').join(',');
+          const params = [...topics, ...groups];
+          db.all(`
+            SELECT i.macro_topic AS topic, COALESCE(i.political_group_std, i.political_group) AS grp, COUNT(*) AS cnt
+            FROM individual_speeches i
+            WHERE i.macro_topic IN (${placeholdersT})
+              AND COALESCE(i.political_group_std, i.political_group) IN (${placeholdersG})
+            GROUP BY i.macro_topic, COALESCE(i.political_group_std, i.political_group)
+          `, params, (e3, rows) => {
+            if (e3) return res.status(500).json({ error: e3.message });
+            res.json({ topics, groups, rows });
+          });
+        });
+      };
+      
+      // If topics filter is provided, use it directly; otherwise get top N
+      if (topicsFilter && topicsFilter.length > 0) {
+        return processWithTopics(topicsFilter);
+      }
+      
+      // Get top topics
+      db.all(`
+        SELECT i.macro_topic AS topic, COUNT(*) AS cnt
+        FROM individual_speeches i
+        WHERE i.macro_topic IS NOT NULL AND TRIM(i.macro_topic)<>''
+        GROUP BY i.macro_topic
+        ORDER BY cnt DESC
+        LIMIT ?
+      `, [topTopics], (e1, trows) => {
+        if (e1) return res.status(500).json({ error: e1.message });
+        const topics = (trows||[]).map(r=>r.topic);
+        if (!topics.length) return res.json({ groups: [], topics: [], rows: [] });
+        processWithTopics(topics);
+      });
+    });
+
+    // GET /api/analytics/by-country?topTopics=10&topCountries=20&topics=...
+    app.get('/api/analytics/by-country', (req, res) => {
+      // Check if specific topics are requested
+      let topicsFilter = null;
+      if (req.query.topics) {
+        try {
+          topicsFilter = Array.isArray(req.query.topics)
+            ? req.query.topics
+            : (String(req.query.topics).trim().startsWith('[')
+                ? JSON.parse(String(req.query.topics))
+                : String(req.query.topics).split(',').map(s => s.trim()).filter(Boolean));
+        } catch (_) { topicsFilter = null; }
+      }
+      
+      // Serve from cache (with optional filtering)
+      if (analyticsCache.data) {
+        const cached = analyticsCache.data.byCountry;
+        
+        if (!topicsFilter || topicsFilter.length === 0) {
+          // No filter - return full cache
+          console.log('⚡ [CACHE] Served by-country from cache (all topics)');
+          return res.json(cached);
+        }
+        
+        // Filter cached data by selected topics (rows are already normalized)
+        const filteredRows = cached.rows.filter(row => 
+          topicsFilter.includes(row.topic)
+        );
+        
+        const filteredTopics = topicsFilter.filter(t => 
+          cached.topics.includes(t)
+        );
+        
+        console.log(`⚡ [CACHE] Served by-country from cache (filtered to ${filteredTopics.length} topics)`);
+        return res.json({
+          topics: filteredTopics,
+          countries: cached.countries,
+          rows: filteredRows
+        });
+      }
+      
+      // Fallback to database if cache not ready
+      const topTopics = Math.max(1, parseInt(req.query.topTopics, 10) || 10);
+      const topCountries = Math.max(1, parseInt(req.query.topCountries, 10) || 20);
+      
+      const processWithTopics = (topics) => {
+        db.all(`
+          SELECT m.country AS country, COUNT(*) AS cnt
+          FROM individual_speeches i
+          LEFT JOIN meps m ON m.id = i.mep_id
+          GROUP BY m.country
+          ORDER BY cnt DESC
+          LIMIT ?
+        `, [topCountries], (e2, crows) => {
+          if (e2) return res.status(500).json({ error: e2.message });
+          const countries = (crows||[]).map(r=>r.country).filter(Boolean);
+          const placeholdersT = topics.map(()=>'?').join(',');
+          const placeholdersC = countries.map(()=>'?').join(',');
+          const params = [...topics, ...countries];
+          db.all(`
+            SELECT i.macro_topic AS topic, m.country AS country, COUNT(*) AS cnt
+            FROM individual_speeches i
+            LEFT JOIN meps m ON m.id = i.mep_id
+            WHERE i.macro_topic IN (${placeholdersT})
+              AND m.country IN (${placeholdersC})
+            GROUP BY i.macro_topic, m.country
+          `, params, (e3, rows) => {
+            if (e3) return res.status(500).json({ error: e3.message });
+            res.json({ topics, countries, rows });
+          });
+        });
+      };
+      
+      // If topics filter is provided, use it directly; otherwise get top N
+      if (topicsFilter && topicsFilter.length > 0) {
+        return processWithTopics(topicsFilter);
+      }
+      
+      db.all(`
+        SELECT i.macro_topic AS topic, COUNT(*) AS cnt
+        FROM individual_speeches i
+        WHERE i.macro_topic IS NOT NULL AND TRIM(i.macro_topic)<>''
+        GROUP BY i.macro_topic
+        ORDER BY cnt DESC LIMIT ?
+      `, [topTopics], (e1, trows) => {
+        if (e1) return res.status(500).json({ error: e1.message });
+        const topics = (trows||[]).map(r=>r.topic);
+        if (!topics.length) return res.json({ countries: [], topics: [], rows: [] });
+        processWithTopics(topics);
+      });
+    });
+
+    // GET /api/analytics/languages?topics=...
+    app.get('/api/analytics/languages', (req, res) => {
+      // Check if specific topics are requested
+      let topicsFilter = null;
+      if (req.query.topics) {
+        try {
+          topicsFilter = Array.isArray(req.query.topics)
+            ? req.query.topics
+            : (String(req.query.topics).trim().startsWith('[')
+                ? JSON.parse(String(req.query.topics))
+                : String(req.query.topics).split(',').map(s => s.trim()).filter(Boolean));
+        } catch (_) { topicsFilter = null; }
+      }
+      
+      // Serve from cache (with optional filtering)
+      if (analyticsCache.data) {
+        if (!topicsFilter || topicsFilter.length === 0) {
+          // No filter - return full cache
+          console.log('⚡ [CACHE] Served languages from cache (all topics)');
+          return res.json(analyticsCache.data.languages);
+        }
+        
+        // For filtered languages, we need to query the database with topic filter
+        // This is because the cache doesn't store per-topic language breakdown
+        console.log('🔍 [QUERY] Computing languages for filtered topics');
+      }
+      
+      // Query database for filtered topics or if cache not ready
+      let sql = `
+        SELECT UPPER(COALESCE(language,'UNK')) AS language, COUNT(*) AS cnt
+        FROM individual_speeches
+      `;
+      let params = [];
+      
+      if (topicsFilter && topicsFilter.length > 0) {
+        // Need to get all variants of the normalized topics
+        if (analyticsCache.data) {
+          const topicVariants = analyticsCache.data.topicVariants;
+          const allVariants = topicsFilter.flatMap(t => topicVariants.get(t) || [t]);
+          const placeholders = allVariants.map(()=>'?').join(',');
+          sql += ` WHERE macro_topic IN (${placeholders})`;
+          params = allVariants;
+        } else {
+          const placeholders = topicsFilter.map(()=>'?').join(',');
+          sql += ` WHERE macro_topic IN (${placeholders})`;
+          params = topicsFilter;
+        }
+      }
+      
+      sql += ` GROUP BY UPPER(COALESCE(language,'UNK')) ORDER BY cnt DESC`;
+      
+      db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ rows });
+      });
+    });
+
+    // GET /api/analytics/top-meps?topic=...&top=20
+    app.get('/api/analytics/top-meps', (req, res) => {
+      const topic = req.query.topic || null;
+      const top = Math.max(1, parseInt(req.query.top, 10) || 20);
+      const params = [];
+      let where = 'WHERE 1=1';
+      if (topic) { where += ' AND i.macro_topic = ?'; params.push(topic); }
+      const sql = `
+        SELECT m.id, m.label, m.country, COALESCE(i.political_group_std, i.political_group) AS grp, COUNT(*) AS cnt
+        FROM individual_speeches i
+        LEFT JOIN meps m ON m.id = i.mep_id
+        ${where}
+        GROUP BY m.id, m.label, m.country, COALESCE(i.political_group_std, i.political_group)
+        ORDER BY cnt DESC
+        LIMIT ${top}
+      `;
+      db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ rows });
+      });
+    });
+
     // Endpoint: fetch and parse table of contents for a given date
     app.get('/api/speech-toc', async (req, res) => {
       const { date } = req.query;
@@ -1276,6 +2106,14 @@ if (process.argv.includes('--parse-recent-speeches')) {
     // Start listening
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server is running on http://localhost:${PORT}`);
+      console.log('🚀 [CACHE] Initializing analytics cache in background...');
+      
+      // Start cache warming in background (don't block server startup)
+      setTimeout(() => {
+        warmAnalyticsCache().catch(err => {
+          console.error('❌ [CACHE] Failed to warm cache:', err);
+        });
+      }, 1000);
     });
   } catch (e) {
     console.error('Failed to initialize application:', e);

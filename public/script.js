@@ -30,6 +30,33 @@ async function fetchPreview(date) {
       if (tab.dataset.tab === 'speeches') {
         loadSpeeches(mepSelect.value, true);
       }
+      // If switching to analytics tab, load analytics
+      if (tab.dataset.tab === 'analytics') {
+        console.log('🔄 [ANALYTICS] Tab switched - checking cache status');
+        
+        // Check cache status first
+        checkCacheStatus().then(status => {
+          if (status && status.ready) {
+            console.log('✅ [CACHE] Cache ready, loading analytics');
+            console.time('⏱️ [ANALYTICS] Total tab load time');
+            loadAnalytics();
+            loadTimeSeries().then(() => {
+              console.log('✅ [ANALYTICS] Time series loaded, loading other charts...');
+              // After time series loads and populates selectedTopics, load other charts
+              Promise.all([
+                loadGroupHeat(window.selectedTopics),
+                loadCountryHeat(window.selectedTopics),
+                loadLanguages(window.selectedTopics)
+              ]).then(() => {
+                console.timeEnd('⏱️ [ANALYTICS] Total tab load time');
+                console.log('✅ [ANALYTICS] All charts loaded successfully');
+              });
+            });
+          } else {
+            console.log('⏳ [CACHE] Cache not ready yet, waiting...');
+          }
+        });
+      }
     });
   });
 
@@ -468,8 +495,710 @@ async function fetchPreview(date) {
     if (tab.dataset.tab === 'speeches' && tab.classList.contains('active')) {
       loadSpeeches(mepSelect.value, true);
     }
+    if (tab.dataset.tab === 'analytics' && tab.classList.contains('active')) {
+      console.log('🔄 [ANALYTICS] Initial load - checking cache status');
+      
+      // Check cache status first
+      checkCacheStatus().then(status => {
+        if (status && status.ready) {
+          console.log('✅ [CACHE] Cache ready, loading analytics');
+          console.time('⏱️ [ANALYTICS] Initial total load time');
+          loadAnalytics();
+          loadTimeSeries().then(() => {
+            console.log('✅ [ANALYTICS] Time series loaded, loading other charts...');
+            // After time series loads and populates selectedTopics, load other charts
+            Promise.all([
+              loadGroupHeat(window.selectedTopics),
+              loadCountryHeat(window.selectedTopics),
+              loadLanguages(window.selectedTopics)
+            ]).then(() => {
+              console.timeEnd('⏱️ [ANALYTICS] Initial total load time');
+              console.log('✅ [ANALYTICS] All charts loaded successfully');
+            });
+          });
+        } else {
+          console.log('⏳ [CACHE] Cache not ready yet, waiting...');
+        }
+      });
+    }
   });
 })();
+
+// --- Descriptive Analytics ---
+async function loadAnalytics() {
+  try {
+    console.time('⏱️ [ANALYTICS] Total loadAnalytics');
+    document.getElementById('trendLoading')?.classList.add('active');
+    document.getElementById('groupLoading')?.classList.add('active');
+    document.getElementById('countryLoading')?.classList.add('active');
+    document.getElementById('langLoading')?.classList.add('active');
+    
+    console.time('⏱️ [ANALYTICS] Fetch overview API');
+    const res = await fetch('/api/analytics/overview');
+    const data = await res.json();
+    console.timeEnd('⏱️ [ANALYTICS] Fetch overview API');
+    
+    if (!data || data.error) throw new Error(data?.error || 'Analytics API error');
+
+    // Coverage
+    const covEl = document.getElementById('coverageStats');
+    if (covEl && data.coverage) {
+      covEl.textContent = `Macro coverage: ${data.coverage.with_macro.toLocaleString()} of ${data.coverage.total.toLocaleString()} speeches (${data.coverage.pct_with_macro}%)`;
+    }
+
+    // Top Macro Topics bar
+    const macroLabels = (data.macroTopicDistribution || []).map(r => r.topic);
+    const macroCounts = (data.macroTopicDistribution || []).map(r => r.count);
+    const macroCtx = document.getElementById('macroTopicChart');
+    if (macroCtx) {
+      const existing = Chart.getChart(macroCtx);
+      if (existing) existing.destroy();
+      new Chart(macroCtx.getContext('2d'), {
+        type: 'bar',
+        data: { labels: macroLabels, datasets: [{ label: 'Speeches', data: macroCounts, backgroundColor: 'rgba(0, 102, 204, 0.6)' }] },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { beginAtZero: true } }, plugins: { legend: { display: false } } }
+      });
+    }
+
+    // Top Specific Focus horizontal bar
+    const focusLabels = (data.topSpecificFocus || []).map(r => `${r.topic} — ${r.focus}`);
+    const focusCounts = (data.topSpecificFocus || []).map(r => r.count);
+    const focusCtx = document.getElementById('specificFocusChart');
+    if (focusCtx) {
+      const existing = Chart.getChart(focusCtx);
+      if (existing) existing.destroy();
+      new Chart(focusCtx.getContext('2d'), {
+        type: 'bar',
+        data: { labels: focusLabels, datasets: [{ label: 'Speeches', data: focusCounts, backgroundColor: 'rgba(34, 197, 94, 0.6)' }] },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { beginAtZero: true } }, plugins: { legend: { display: false } } }
+      });
+    }
+
+    // Monthly Trends (line chart per topic)
+    const trendCtx = document.getElementById('trendChart');
+    if (trendCtx) {
+      const rows = data.trendsMonthly || [];
+      const months = Array.from(new Set(rows.map(r => r.ym))).sort();
+      const topics = Array.from(new Set(rows.map(r => r.topic)));
+      const colorFor = (i) => `hsl(${(i*360)/Math.max(1, topics.length)},70%,50%)`;
+      const datasets = topics.map((t, i) => {
+        const byMonth = new Map(rows.filter(r => r.topic === t).map(r => [r.ym, r.count]));
+        const dataPoints = months.map(m => byMonth.get(m) || 0);
+        return { label: t, data: dataPoints, borderColor: colorFor(i), backgroundColor: colorFor(i), tension: 0.2 };
+      });
+      const existing = Chart.getChart(trendCtx);
+      if (existing) existing.destroy();
+      new Chart(trendCtx.getContext('2d'), {
+        type: 'line',
+        data: { labels: months, datasets },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+      });
+    }
+  } catch (e) {
+    const covEl = document.getElementById('coverageStats');
+    if (covEl) covEl.textContent = 'Failed to load analytics.';
+    console.error('Analytics load failed:', e);
+  } finally {
+    document.getElementById('trendLoading')?.classList.remove('active');
+    document.getElementById('groupLoading')?.classList.remove('active');
+    document.getElementById('countryLoading')?.classList.remove('active');
+    document.getElementById('langLoading')?.classList.remove('active');
+    console.timeEnd('⏱️ [ANALYTICS] Total loadAnalytics');
+  }
+}
+
+// Global variables to store currently selected topics and chart data
+window.selectedTopics = [];
+window.allAvailableTopics = [];
+window.trendChartData = null; // Store the full trend chart data for filtering
+
+// Update selected topic count display
+function updateSelectedCount() {
+  const checked = document.querySelectorAll('.topicCheck:checked').length;
+  const total = document.querySelectorAll('.topicCheck').length;
+  const countEl = document.getElementById('selectedTopicCount');
+  if (countEl) {
+    countEl.textContent = `${checked} of ${total} topics selected`;
+  }
+}
+
+// Check cache status and show loading progress
+async function checkCacheStatus() {
+  try {
+    const res = await fetch('/api/analytics/cache-status');
+    const status = await res.json();
+    
+    const progressDiv = document.getElementById('cacheLoadingProgress');
+    const progressBar = document.getElementById('cacheProgressBar');
+    const progressPercent = document.getElementById('cacheProgressPercent');
+    const progressMessage = document.getElementById('cacheProgressMessage');
+    
+    if (!progressDiv) return status;
+    
+    if (status.ready) {
+      // Cache is ready - hide progress bar
+      progressDiv.style.display = 'none';
+      console.log('✅ [CACHE] Cache is ready!');
+      return status;
+    } else if (status.warming) {
+      // Cache is warming - show progress
+      progressDiv.style.display = 'block';
+      const percent = status.progress?.percent || 0;
+      progressBar.style.width = percent + '%';
+      progressPercent.textContent = percent + '%';
+      progressMessage.textContent = status.progress?.message || 'Loading...';
+      console.log(`⏳ [CACHE] Warming... ${percent}% - ${status.progress?.message}`);
+      
+      // Poll again in 500ms and continue when ready
+      return new Promise(resolve => {
+        setTimeout(() => {
+          checkCacheStatus().then(resolve);
+        }, 500);
+      });
+    } else {
+      // Cache not started yet - show waiting message
+      progressDiv.style.display = 'block';
+      progressBar.style.width = '0%';
+      progressPercent.textContent = '';
+      progressMessage.textContent = 'Initializing analytics cache...';
+      console.log('⏳ [CACHE] Cache not started yet, waiting...');
+      
+      // Poll again in 1s
+      return new Promise(resolve => {
+        setTimeout(() => {
+          checkCacheStatus().then(resolve);
+        }, 1000);
+      });
+    }
+  } catch (error) {
+    console.error('Error checking cache status:', error);
+    return null;
+  }
+}
+
+// Helpers for extended analytics
+async function loadTimeSeries() {
+  console.time('⏱️ [TRENDS] Total loadTimeSeries');
+  document.getElementById('trendLoading')?.classList.add('active');
+  // Read granularity from radio buttons
+  const interval = document.getElementById('granQuarter')?.checked ? 'quarter' : 'month';
+  const params = new URLSearchParams();
+  params.set('interval', interval);
+  params.set('all', 'true'); // always fetch all topics over full range
+  
+  // Update title based on granularity
+  const titleEl = document.getElementById('trendChartTitle');
+  if (titleEl) {
+    titleEl.textContent = interval === 'quarter' ? 'Quarterly Trends (Top Topics)' : 'Monthly Trends (Top Topics)';
+  }
+  
+  console.time('⏱️ [TRENDS] Fetch time-series API');
+  const res = await fetch('/api/analytics/time-series?' + params.toString());
+  const json = await res.json();
+  console.timeEnd('⏱️ [TRENDS] Fetch time-series API');
+
+  // If no datasets, clear UI
+  if (!json.datasets || !json.datasets.length) {
+    const selector = document.getElementById('topicSelector');
+    if (selector) selector.innerHTML = '<em>No topics found for this range.</em>';
+    const ctx = document.getElementById('trendChart');
+    const existing = Chart.getChart(ctx);
+    if (existing) existing.destroy();
+    document.getElementById('trendLoading')?.classList.remove('active');
+    return;
+  }
+
+  // Build topic selector for ALL topics in this range
+  const allLabels = (json.datasets || []).map(ds => ds.label).sort((a,b)=>a.localeCompare(b));
+  window.selectedTopics = [...allLabels]; // Initialize with all topics selected
+  window.allAvailableTopics = [...allLabels]; // Store all available topics
+  
+  const selector = document.getElementById('topicSelector');
+  if (selector) {
+    selector.innerHTML = allLabels.map(label => {
+      const id = 'sel_' + label.replace(/[^a-z0-9]/gi,'_');
+      return `<label style=\"display:flex; align-items:center; gap:6px; font-size:13px; color:#374151; padding:4px 6px; border-radius:4px; background:#fff; border:1px solid #e2e8f0;\">\
+        <input type=\"checkbox\" class=\"topicCheck\" id=\"${id}\" data-label=\"${label}\" checked>\
+        <span title=\"${label}\" style=\"overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;\">${label}</span>\
+      </label>`;
+    }).join('');
+    
+    // Update selected count
+    updateSelectedCount();
+  }
+
+  // Store data globally for filtering
+  window.trendChartData = {
+    labels: json.labels || [],
+    datasets: json.datasets || []
+  };
+  
+  const ctx = document.getElementById('trendChart');
+  const existing = Chart.getChart(ctx);
+  if (existing) existing.destroy();
+  
+  // Better color palette with distinct, visually different colors
+  const distinctColors = [
+    '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
+    '#1abc9c', '#e67e22', '#34495e', '#16a085', '#c0392b',
+    '#d35400', '#8e44ad', '#2980b9', '#27ae60', '#f1c40f',
+    '#e84393', '#00b894', '#0984e3', '#fdcb6e', '#6c5ce7',
+    '#fd79a8', '#00cec9', '#74b9ff', '#a29bfe', '#fd79a8',
+    '#fab1a0', '#ff7675', '#ffeaa7', '#55efc4', '#81ecec',
+    '#74b9ff', '#a29bfe', '#dfe6e9'
+  ];
+  window.getDistinctColor = (i) => distinctColors[i % distinctColors.length];
+  
+  let datasets = (json.datasets||[]).map((d, i) => ({
+    ...d,
+    borderColor: window.getDistinctColor(i),
+    backgroundColor: window.getDistinctColor(i),
+    tension: 0.2,
+    borderWidth: 2
+  }));
+  new Chart(ctx.getContext('2d'), {
+    type: 'line',
+    data: { labels: json.labels || [], datasets },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+  });
+
+  // Initialize filter controls after chart is created
+  initializeFilterControls();
+
+  document.getElementById('trendLoading')?.classList.remove('active');
+  console.timeEnd('⏱️ [TRENDS] Total loadTimeSeries');
+}
+
+// Apply topic filter function (accessible globally)
+window.applyTopicFilter = async function() {
+  const selected = Array.from(document.querySelectorAll('.topicCheck'))
+    .filter(c=>c.checked)
+    .map(c=>c.getAttribute('data-label'));
+  
+  console.log(`🔄 [FILTER] Applying filter with ${selected.length} topics`);
+  
+  // Update global selected topics
+  window.selectedTopics = selected;
+  
+  // Update trend chart
+  const ctx = document.getElementById('trendChart');
+  const chart = Chart.getChart(ctx);
+  if (chart && window.trendChartData) {
+    chart.data.datasets = (window.trendChartData.datasets||[])
+      .filter(ds => selected.includes(ds.label))
+      .map((d, i) => ({
+        ...d,
+        borderColor: window.getDistinctColor(i),
+        backgroundColor: window.getDistinctColor(i),
+        tension: 0.2,
+        borderWidth: 2
+      }));
+    chart.update();
+  }
+  
+  // Update the other three charts with the selected topics
+  await Promise.all([
+    loadGroupHeat(selected),
+    loadCountryHeat(selected),
+    loadLanguages(selected)
+  ]);
+  
+  console.log('✅ [FILTER] All charts updated');
+};
+
+// Initialize Apply button listener (called after loadTimeSeries)
+function initializeFilterControls() {
+  // Select/Clear All buttons only update checkboxes, not charts
+  const selAllBtn = document.getElementById('selAllTopics');
+  if (selAllBtn && !selAllBtn.hasAttribute('data-listener')) {
+    selAllBtn.setAttribute('data-listener', 'true');
+    selAllBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.querySelectorAll('.topicCheck').forEach(c => c.checked = true);
+      updateSelectedCount();
+    });
+  }
+  
+  const clearBtn = document.getElementById('clearTopics');
+  if (clearBtn && !clearBtn.hasAttribute('data-listener')) {
+    clearBtn.setAttribute('data-listener', 'true');
+    clearBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.querySelectorAll('.topicCheck').forEach(c => c.checked = false);
+      updateSelectedCount();
+    });
+  }
+  
+  // Apply button triggers the actual update
+  const applyBtn = document.getElementById('applyTopicFilter');
+  if (applyBtn && !applyBtn.hasAttribute('data-listener')) {
+    applyBtn.setAttribute('data-listener', 'true');
+    applyBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.applyTopicFilter();
+    });
+  }
+  
+  // Update count on checkbox change (but don't reload charts)
+  const selector = document.getElementById('topicSelector');
+  if (selector && !selector.hasAttribute('data-listener')) {
+    selector.setAttribute('data-listener', 'true');
+    selector.addEventListener('change', (e) => {
+      if (e.target && e.target.classList.contains('topicCheck')) {
+        updateSelectedCount();
+      }
+    });
+  }
+  
+  const topicFilter = document.getElementById('topicFilter');
+  if (topicFilter && !topicFilter.hasAttribute('data-listener')) {
+    topicFilter.setAttribute('data-listener', 'true');
+    topicFilter.addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase();
+      const selectorEl = document.getElementById('topicSelector');
+      if (selectorEl) {
+        selectorEl.querySelectorAll('label').forEach(l => {
+          const text = l.querySelector('span')?.textContent.toLowerCase() || '';
+          l.style.display = text.includes(q) ? '' : 'none';
+        });
+      }
+    });
+  }
+}
+
+async function loadGroupHeat(selectedTopics = null) {
+  console.time('⏱️ [GROUPS] loadGroupHeat');
+  document.getElementById('groupLoading')?.classList.add('active');
+  const params = new URLSearchParams();
+  if (selectedTopics && selectedTopics.length > 0) {
+    params.set('topics', JSON.stringify(selectedTopics));
+  }
+  console.time('⏱️ [GROUPS] Fetch by-group API');
+  const res = await fetch('/api/analytics/by-group?' + params.toString());
+  const json = await res.json();
+  console.timeEnd('⏱️ [GROUPS] Fetch by-group API');
+  const topics = json.topics || [];
+  const groups = json.groups || [];
+  const matrix = topics.map(t => groups.map(g => {
+    const r = (json.rows||[]).find(x => x.topic===t && x.grp===g);
+    return r ? r.cnt : 0;
+  }));
+  const ctx = document.getElementById('groupHeat');
+  const existing = Chart.getChart(ctx);
+  if (existing) existing.destroy();
+  // Render stacked bar: one dataset per topic, labels=groups
+  const datasets = topics.map((t,i) => ({ label: t, data: matrix[i], backgroundColor: `hsl(${(i*360)/Math.max(1,topics.length)},60%,60%)` }));
+  new Chart(ctx.getContext('2d'), {
+    type: 'bar',
+    data: { labels: groups, datasets },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }
+  });
+  document.getElementById('groupLoading')?.classList.remove('active');
+  console.timeEnd('⏱️ [GROUPS] loadGroupHeat');
+}
+
+async function loadCountryHeat(selectedTopics = null) {
+  console.time('⏱️ [COUNTRIES] loadCountryHeat');
+  document.getElementById('countryLoading')?.classList.add('active');
+  const params = new URLSearchParams();
+  if (selectedTopics && selectedTopics.length > 0) {
+    params.set('topics', JSON.stringify(selectedTopics));
+  }
+  console.time('⏱️ [COUNTRIES] Fetch by-country API');
+  const res = await fetch('/api/analytics/by-country?' + params.toString());
+  const json = await res.json();
+  console.timeEnd('⏱️ [COUNTRIES] Fetch by-country API');
+  const topics = json.topics || [];
+  const countries = json.countries || [];
+  const matrix = topics.map(t => countries.map(c => {
+    const r = (json.rows||[]).find(x => x.topic===t && x.country===c);
+    return r ? r.cnt : 0;
+  }));
+  const ctx = document.getElementById('countryHeat');
+  const existing = Chart.getChart(ctx);
+  if (existing) existing.destroy();
+  const datasets = topics.map((t,i) => ({ label: t, data: matrix[i], backgroundColor: `hsl(${(i*360)/Math.max(1,topics.length)},60%,70%)` }));
+  new Chart(ctx.getContext('2d'), {
+    type: 'bar',
+    data: { labels: countries, datasets },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }
+  });
+  document.getElementById('countryLoading')?.classList.remove('active');
+  console.timeEnd('⏱️ [COUNTRIES] loadCountryHeat');
+}
+
+async function loadLanguages(selectedTopics = null) {
+  console.time('⏱️ [LANGUAGES] loadLanguages');
+  document.getElementById('langLoading')?.classList.add('active');
+  const params = new URLSearchParams();
+  if (selectedTopics && selectedTopics.length > 0) {
+    params.set('topics', JSON.stringify(selectedTopics));
+  }
+  console.time('⏱️ [LANGUAGES] Fetch languages API');
+  const res = await fetch('/api/analytics/languages?' + params.toString());
+  const json = await res.json();
+  console.timeEnd('⏱️ [LANGUAGES] Fetch languages API');
+  const labels = (json.rows||[]).map(r => r.language);
+  const data = (json.rows||[]).map(r => r.cnt);
+  const ctx = document.getElementById('langChart');
+  const existing = Chart.getChart(ctx);
+  if (existing) existing.destroy();
+  new Chart(ctx.getContext('2d'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: labels.map((_,i)=>`hsl(${(i*360)/Math.max(1,labels.length)},70%,60%)`) }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+  });
+  document.getElementById('langLoading')?.classList.remove('active');
+  console.timeEnd('⏱️ [LANGUAGES] loadLanguages');
+}
+
+async function loadTopMeps() {
+  document.getElementById('mepLoading')?.classList.add('active');
+  const topic = document.getElementById('topMepTopic').value.trim();
+  const params = new URLSearchParams();
+  if (topic) params.set('topic', topic);
+  const res = await fetch('/api/analytics/top-meps?' + params.toString());
+  const json = await res.json();
+  const tbody = document.querySelector('#topMepTable tbody');
+  tbody.innerHTML = (json.rows||[]).map(r => `<tr><td>${r.label||'(Unknown)'}</td><td>${r.country||''}</td><td>${r.grp||''}</td><td>${r.cnt}</td></tr>`).join('');
+  document.getElementById('mepLoading')?.classList.remove('active');
+}
+
+// Wire analytics controls
+document.addEventListener('click', (e) => {
+  if (e.target && e.target.id === 'anaApply') {
+    loadTimeSeries();
+    loadGroupHeat();
+    loadCountryHeat();
+    loadLanguages();
+  }
+  if (e.target && e.target.id === 'loadTopMep') {
+    loadTopMeps();
+  }
+});
+
+// Wire analytics controls for granularity radios
+document.addEventListener('change', (e) => {
+  if (e.target && (e.target.id === 'granMonth' || e.target.id === 'granQuarter')) {
+    loadTimeSeries().then(() => {
+      // After time series reloads with new granularity, reload other charts
+      loadGroupHeat(window.selectedTopics);
+      loadCountryHeat(window.selectedTopics);
+      loadLanguages(window.selectedTopics);
+    });
+  }
+});
+
+// --- Modal chart viewer ---
+let modalChartInst = null;
+function openChartModal(title, labels, datasets) {
+  const modal = document.getElementById('chartModal');
+  const titleEl = document.getElementById('chartModalTitle');
+  const canvas = document.getElementById('modalChart');
+  titleEl.textContent = title || 'Chart';
+  modal.style.display = 'block';
+  // Destroy previous instances
+  if (modalChartInst) {
+    try { modalChartInst.destroy(); } catch (_) {}
+  }
+  if (window.currentModalChart) {
+    try { window.currentModalChart.destroy(); } catch (_) {}
+    window.currentModalChart = null;
+  }
+  modalChartInst = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+function closeChartModal() {
+  const modal = document.getElementById('chartModal');
+  modal.style.display = 'none';
+  // Clean up modal chart instance
+  if (window.currentModalChart) {
+    try {
+      window.currentModalChart.destroy();
+    } catch (e) {
+      // ignore
+    }
+    window.currentModalChart = null;
+  }
+  if (modalChartInst) {
+    try {
+      modalChartInst.destroy();
+    } catch (e) {
+      // ignore
+    }
+    modalChartInst = null;
+  }
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target && (e.target.id === 'chartModalClose' || e.target.id === 'chartModalBackdrop')) {
+    closeChartModal();
+  }
+});
+
+// Attach click handlers to chart containers to open modal
+function wireEnlargeableCharts() {
+  // Top Macro Topics chart
+  const macroCanvas = document.getElementById('macroTopicChart');
+  if (macroCanvas) {
+    macroCanvas.parentElement.style.cursor = 'zoom-in';
+    macroCanvas.parentElement.addEventListener('click', () => {
+      const chart = Chart.getChart(macroCanvas);
+      if (!chart) return;
+      const ds = chart.data.datasets.map(d => ({ ...d }));
+      const modalInst = new Chart(document.getElementById('modalChart').getContext('2d'), {
+        type: 'bar',
+        data: { labels: chart.data.labels.slice(), datasets: ds },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false, 
+          indexAxis: 'y', 
+          scales: { x: { beginAtZero: true } }, 
+          plugins: { legend: { display: false } } 
+        }
+      });
+      const modal = document.getElementById('chartModal');
+      document.getElementById('chartModalTitle').textContent = 'Top Macro Topics';
+      modal.style.display = 'block';
+      if (window.currentModalChart) window.currentModalChart.destroy();
+      window.currentModalChart = modalInst;
+    });
+  }
+  
+  // Top Specific Focus chart
+  const focusCanvas = document.getElementById('specificFocusChart');
+  if (focusCanvas) {
+    focusCanvas.parentElement.style.cursor = 'zoom-in';
+    focusCanvas.parentElement.addEventListener('click', () => {
+      const chart = Chart.getChart(focusCanvas);
+      if (!chart) return;
+      const ds = chart.data.datasets.map(d => ({ ...d }));
+      const modalInst = new Chart(document.getElementById('modalChart').getContext('2d'), {
+        type: 'bar',
+        data: { labels: chart.data.labels.slice(), datasets: ds },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false, 
+          indexAxis: 'y', 
+          scales: { x: { beginAtZero: true } }, 
+          plugins: { legend: { display: false } } 
+        }
+      });
+      const modal = document.getElementById('chartModal');
+      document.getElementById('chartModalTitle').textContent = 'Top Specific Focus';
+      modal.style.display = 'block';
+      if (window.currentModalChart) window.currentModalChart.destroy();
+      window.currentModalChart = modalInst;
+    });
+  }
+  
+  // Monthly Trends
+  const trendCard = document.querySelector('#analytics #trendChart')?.closest('.chart-container');
+  if (trendCard) {
+    trendCard.style.cursor = 'zoom-in';
+    trendCard.addEventListener('click', () => {
+      const chart = Chart.getChart(document.getElementById('trendChart'));
+      if (!chart) return;
+      // Clone datasets shallowly for modal
+      const ds = chart.data.datasets.map(d => ({ ...d }));
+      openChartModal('Monthly Trends', chart.data.labels.slice(), ds);
+    });
+  }
+  // Group chart - horizontal stacked bar
+  const groupCanvas = document.getElementById('groupHeat');
+  if (groupCanvas) {
+    groupCanvas.parentElement.style.cursor = 'zoom-in';
+    groupCanvas.parentElement.addEventListener('click', () => {
+      const chart = Chart.getChart(groupCanvas);
+      if (!chart) return;
+      const ds = chart.data.datasets.map(d => ({ ...d }));
+      const modalInst = new Chart(document.getElementById('modalChart').getContext('2d'), {
+        type: 'bar',
+        data: { labels: chart.data.labels.slice(), datasets: ds },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false, 
+          indexAxis: 'y',
+          plugins: { legend: { position: 'bottom' } }, 
+          scales: { 
+            x: { stacked: true, beginAtZero: true },
+            y: { stacked: true }
+          }
+        }
+      });
+      const modal = document.getElementById('chartModal');
+      document.getElementById('chartModalTitle').textContent = 'Macro Topics × Political Groups';
+      modal.style.display = 'block';
+      if (window.currentModalChart) window.currentModalChart.destroy();
+      window.currentModalChart = modalInst;
+    });
+  }
+  
+  // Country chart - horizontal stacked bar
+  const countryCanvas = document.getElementById('countryHeat');
+  if (countryCanvas) {
+    countryCanvas.parentElement.style.cursor = 'zoom-in';
+    countryCanvas.parentElement.addEventListener('click', () => {
+      const chart = Chart.getChart(countryCanvas);
+      if (!chart) return;
+      const ds = chart.data.datasets.map(d => ({ ...d }));
+      const modalInst = new Chart(document.getElementById('modalChart').getContext('2d'), {
+        type: 'bar',
+        data: { labels: chart.data.labels.slice(), datasets: ds },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false, 
+          indexAxis: 'y',
+          plugins: { legend: { position: 'bottom' } }, 
+          scales: { 
+            x: { stacked: true, beginAtZero: true },
+            y: { stacked: true }
+          }
+        }
+      });
+      const modal = document.getElementById('chartModal');
+      document.getElementById('chartModalTitle').textContent = 'Macro Topics × Countries';
+      modal.style.display = 'block';
+      if (window.currentModalChart) window.currentModalChart.destroy();
+      window.currentModalChart = modalInst;
+    });
+  }
+  
+  // Languages chart - doughnut
+  const langCanvas = document.getElementById('langChart');
+  if (langCanvas) {
+    langCanvas.parentElement.style.cursor = 'zoom-in';
+    langCanvas.parentElement.addEventListener('click', () => {
+      const chart = Chart.getChart(langCanvas);
+      if (!chart) return;
+      const ds = chart.data.datasets.map(d => ({ ...d }));
+      const modalInst = new Chart(document.getElementById('modalChart').getContext('2d'), {
+        type: 'doughnut',
+        data: { labels: chart.data.labels.slice(), datasets: ds },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'right' } }
+        }
+      });
+      const modal = document.getElementById('chartModal');
+      document.getElementById('chartModalTitle').textContent = 'Languages';
+      modal.style.display = 'block';
+      if (window.currentModalChart) window.currentModalChart.destroy();
+      window.currentModalChart = modalInst;
+    });
+  }
+}
+
+// Wire after analytics load
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(wireEnlargeableCharts, 1000);
+});
+
 
 // Refresh Button Functionality
 (function() {

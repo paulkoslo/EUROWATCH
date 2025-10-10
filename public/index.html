@@ -22,6 +22,7 @@
     <nav class="tabs">
       <button class="tab active" data-tab="meps">MEPs</button>
       <button class="tab" data-tab="speeches">Parliament Sittings</button>
+      <button class="tab" data-tab="analytics">Descriptive Analytics</button>
     </nav>
 
     <!-- MEPs tab content -->
@@ -138,6 +139,106 @@
         </table>
       </div>
     </div>
+
+    <!-- Analytics tab content -->
+    <div id="analytics" class="tab-content">
+      <h2>Descriptive Analytics</h2>
+      <div style="margin-bottom:1rem;color:#555">Overview of macro topics, specific focuses, and recent trends.</div>
+      
+      <!-- Cache Loading Progress -->
+      <div id="cacheLoadingProgress" style="display:none; background:#f0f9ff; border:1px solid #0ea5e9; border-radius:8px; padding:1.5rem; margin-bottom:1.5rem;">
+        <h3 style="margin:0 0 1rem 0; color:#0369a1; font-size:1.1rem;">⏳ Loading Analytics Data...</h3>
+        <div style="background:#e0f2fe; border-radius:8px; height:32px; position:relative; overflow:hidden; margin-bottom:0.75rem;">
+          <div id="cacheProgressBar" style="background:#0ea5e9; height:100%; width:0%; transition:width 0.3s; border-radius:8px; display:flex; align-items:center; justify-content:center;">
+            <span id="cacheProgressPercent" style="color:white; font-weight:bold; font-size:14px; text-shadow:0 1px 2px rgba(0,0,0,0.2);"></span>
+          </div>
+        </div>
+        <div id="cacheProgressMessage" style="color:#0369a1; font-size:14px; text-align:center;"></div>
+      </div>
+      <!-- Topic Filter Section (applies to all charts) -->
+      <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:1rem; margin-bottom:1.5rem;">
+        <h3 style="margin:0 0 0.75rem 0; color:#1e293b; font-size:1rem;">🔍 Topic Filter (applies to all charts)</h3>
+        <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-start;">
+          <div style="flex: 1 1 300px; min-width: 280px;">
+            <input id="topicFilter" placeholder="Search topics..." style="width:100%; padding:8px 12px; margin-bottom:8px; border:1px solid #cbd5e1; border-radius:6px; font-size:14px;" />
+            <div id="topicSelector" style="max-height:200px; overflow:auto; display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:6px; background:#fff; border:1px solid #e2e8f0; border-radius:6px; padding:8px;"></div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; gap:6px;">
+              <button id="selAllTopics" style="padding:8px 16px; font-size:13px; background:#3b82f6; color:white; border:none; border-radius:6px; cursor:pointer;">Select All</button>
+              <button id="clearTopics" style="padding:8px 16px; font-size:13px; background:#6b7280; color:white; border:none; border-radius:6px; cursor:pointer;">Clear All</button>
+            </div>
+            <button id="applyTopicFilter" style="padding:10px 20px; font-size:14px; font-weight:600; background:#10b981; color:white; border:none; border-radius:6px; cursor:pointer; box-shadow:0 2px 4px rgba(16,185,129,0.3);">✓ Apply Filter</button>
+            <div id="selectedTopicCount" style="font-size:12px; color:#64748b; text-align:center;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;align-items:center;">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <span style="font-weight:600;color:#374151">Time:</span>
+          <label style="display:flex; align-items:center; gap:6px;">
+            <input type="radio" name="granularity" id="granMonth" value="month" checked>
+            Monthly
+          </label>
+          <label style="display:flex; align-items:center; gap:6px;">
+            <input type="radio" name="granularity" id="granQuarter" value="quarter">
+            Quarterly
+          </label>
+        </div>
+        <span style="color:#6b7280">(Always showing full 10-year range)</span>
+      </div>
+      <div class="charts-container">
+        <div class="chart-container">
+          <h3>Coverage</h3>
+          <div id="coverageStats" style="font-weight:600;color:#333">Loading…</div>
+        </div>
+        <div class="chart-container">
+          <h3>Top Macro Topics</h3>
+          <canvas id="macroTopicChart"></canvas>
+        </div>
+        <div class="chart-container">
+          <h3>Top Specific Focus</h3>
+          <canvas id="specificFocusChart"></canvas>
+        </div>
+      </div>
+      <div class="chart-container" style="position:relative;">
+        <h3 id="trendChartTitle">Monthly Trends (Top Topics)</h3>
+        <div class="loading-overlay" id="trendLoading"><div class="spinner"></div></div>
+        <canvas id="trendChart"></canvas>
+      </div>
+
+      <div class="charts-container">
+        <div class="chart-container" style="position:relative;">
+          <h3>Macro Topics × Political Groups</h3>
+          <div class="loading-overlay" id="groupLoading"><div class="spinner"></div></div>
+          <canvas id="groupHeat"></canvas>
+        </div>
+        <div class="chart-container" style="position:relative;">
+          <h3>Macro Topics × Countries</h3>
+          <div class="loading-overlay" id="countryLoading"><div class="spinner"></div></div>
+          <canvas id="countryHeat"></canvas>
+        </div>
+        <div class="chart-container" style="position:relative;">
+          <h3>Languages</h3>
+          <div class="loading-overlay" id="langLoading"><div class="spinner"></div></div>
+          <canvas id="langChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-container" style="position:relative;">
+        <h3>Top MEPs (by selected topic)</h3>
+        <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">
+          <label>Topic: <input id="topMepTopic" placeholder="leave empty = all" style="width:280px"></label>
+          <button id="loadTopMep">Load</button>
+        </div>
+        <div class="loading-overlay" id="mepLoading"><div class="spinner"></div></div>
+        <table id="topMepTable" class="data-table">
+          <thead><tr><th>MEP</th><th>Country</th><th>Group</th><th>Speeches</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <footer style="text-align: center; padding: 2rem; background: var(--eu-blue); color: white; margin-top: 2rem;">
@@ -190,5 +291,19 @@
 
   <script src="script.js"></script>
   <script src="newest.js"></script>
+
+  <!-- Large Chart Modal -->
+  <div id="chartModal" style="display:none; position:fixed; inset:0; z-index:10000;">
+    <div id="chartModalBackdrop" style="position:absolute; inset:0; background:rgba(0,0,0,0.6);"></div>
+    <div id="chartModalContent" style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:90vw; max-width:1400px; height:78vh; background:#fff; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.3); display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid #e5e7eb;">
+        <h3 id="chartModalTitle" style="margin:0; font-size:1.1rem; color:#111827;">Chart</h3>
+        <button id="chartModalClose" aria-label="Close" style="background:#ef4444; border:none; color:#fff; padding:6px 10px; border-radius:6px;">Close</button>
+      </div>
+      <div style="flex:1 1 auto; padding:12px;">
+        <canvas id="modalChart" style="width:100%; height:100%;"></canvas>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

@@ -533,3 +533,70 @@ select:focus {
   line-height: 1.7;
   color: var(--eu-gray-800);
 }
+
+/* Analytics tweaks */
+#analytics .chart-container h3 {
+  margin-top: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+#trendChart {
+  height: 420px !important;
+}
+
+#groupHeat, #countryHeat {
+  height: 380px !important;
+}
+
+#langChart {
+  height: 320px !important;
+}
+
+#macroTopicChart, #specificFocusChart {
+  height: 280px !important;
+}
+
+#topicSelector label {
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+#topicSelector label:hover {
+  background: #f3f4f6;
+}
+/* Topic selector in filter section */
+#topicSelector { overflow: auto; }
+
+/* Modal fixes for mobile */
+@media (max-width: 768px) {
+  #chartModalContent { width: 95vw !important; height: 75vh !important; }
+}
+
+/* Prevent chart overlap and enforce grid spacing */
+#analytics .charts-container {
+  align-items: stretch;
+}
+#analytics .chart-container {
+  min-height: 280px;
+  position: relative;
+}
+
+
+/* Loading overlay */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+.loading-overlay.active { display: flex; }
+.spinner {
+  width: 28px; height: 28px;
+  border: 3px solid #cbd5e1;
+  border-top-color: var(--eu-blue);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }

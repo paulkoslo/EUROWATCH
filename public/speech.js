@@ -610,8 +610,9 @@ function displayIndividualSpeeches(speeches) {
     const title = speech.title || '';
     const content = speech.speech_content || 'No content available';
     const language = speech.language || 'EN';
-    const topic = speech.topic || null;
-    const classifiedTopic = speech.classified_topic || null;
+    const macroTopic = speech.macro_topic || null;
+    const macroFocus = speech.macro_specific_focus || null;
+    const topic = speech.topic || null; // legacy html topic as fallback
     
     // Create a unique ID for each speech
     const speechId = `speech-${speech.speech_order}`;
@@ -630,25 +631,27 @@ function displayIndividualSpeeches(speeches) {
     
     const languageDisplay = languageNames[language] || language;
     
-    // Show topic header if this speech has a different topic than the previous one
-    if (topic && topic !== currentTopic) {
+    // Determine display header: prefer macro topic + focus, fallback to legacy topic
+    const headerLabel = macroTopic ? (macroFocus ? `${macroTopic} — ${macroFocus}` : macroTopic) : topic;
+    // Show topic header if this speech has a different header than the previous one
+    if (headerLabel && headerLabel !== currentTopic) {
       html += `
         <div style="background: linear-gradient(135deg, #003399, #0044cc); color: #ffffff !important; padding: 0.8rem 1rem; margin: 1rem 0 0.5rem 0; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,51,153,0.3);">
-          <h3 style="margin: 0; font-size: 1.1em; font-weight: 600; color: #ffffff !important;">📋 ${topic}</h3>
+          <h3 style="margin: 0; font-size: 1.1em; font-weight: 600; color: #ffffff !important;">📋 ${headerLabel}</h3>
         </div>
       `;
-      currentTopic = topic;
+      currentTopic = headerLabel;
     }
     
     html += `
       <div style="border: 1px solid #ddd; border-radius: 8px; margin-bottom: 0.5rem; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-        ${classifiedTopic ? `
+        ${macroTopic ? `
           <div style="background: #e8f5e8; color: #2d5a2d; padding: 0.2rem 0.5rem; border-radius: 8px 8px 0 0; font-size: 0.65em; font-weight: 500; text-align: center; border-bottom: 1px solid #d4edda;">
-            AI: ${classifiedTopic}
+            AI: ${macroFocus ? `${macroTopic} — ${macroFocus}` : macroTopic}
           </div>
         ` : ''}
         <details style="padding: 0;">
-          <summary style="padding: 1rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; border-radius: ${classifiedTopic ? '0 0 8px 8px' : '8px 8px 0 0'}; list-style: none; outline: none;">
+          <summary style="padding: 1rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; border-radius: ${macroTopic ? '0 0 8px 8px' : '8px 8px 0 0'}; list-style: none; outline: none;">
             <div style="display: flex; align-items: center; gap: 1rem;">
               <h3 style="margin: 0; color: var(--eu-blue); font-size: 1.1em;">${index + 1}. ${speaker}</h3>
               <span style="font-size: 0.8em; color: #666; background: #e9ecef; padding: 0.2em 0.5em; border-radius: 4px;">#${speech.speech_order}</span>
