@@ -622,6 +622,22 @@ function updateSelectedCount() {
   }
 }
 
+// Calculate simple moving average
+function calculateMovingAverage(data, windowSize) {
+  if (!data || data.length === 0) return [];
+  const result = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < windowSize - 1) {
+      result.push(null); // Not enough data points yet
+    } else {
+      const window = data.slice(i - windowSize + 1, i + 1);
+      const avg = window.reduce((sum, val) => sum + val, 0) / windowSize;
+      result.push(Math.round(avg * 100) / 100); // Round to 2 decimals
+    }
+  }
+  return result;
+}
+
 // Check cache status and show loading progress
 async function checkCacheStatus() {
   try {
@@ -784,15 +800,47 @@ window.applyTopicFilter = async function() {
   const ctx = document.getElementById('trendChart');
   const chart = Chart.getChart(ctx);
   if (chart && window.trendChartData) {
-    chart.data.datasets = (window.trendChartData.datasets||[])
+    const showSmooth = document.getElementById('showSmoothAvg')?.checked;
+    const windowSize = parseInt(document.getElementById('smoothWindow')?.value || '6');
+    
+    let datasets = (window.trendChartData.datasets||[])
       .filter(ds => selected.includes(ds.label))
-      .map((d, i) => ({
-        ...d,
-        borderColor: window.getDistinctColor(i),
-        backgroundColor: window.getDistinctColor(i),
-        tension: 0.2,
-        borderWidth: 2
-      }));
+      .map((d, i) => {
+        const color = window.getDistinctColor(i);
+        return {
+          ...d,
+          label: d.label,
+          borderColor: showSmooth ? color + '40' : color, // Light/transparent when smooth is on
+          backgroundColor: showSmooth ? color + '20' : color + '40',
+          tension: 0.2,
+          borderWidth: showSmooth ? 1 : 2, // Thinner when smooth is on
+          borderDash: [], // Solid line for actual data
+          pointRadius: showSmooth ? 2 : 3, // Smaller points when smooth is on
+          pointBackgroundColor: showSmooth ? color + '60' : color
+        };
+      });
+    
+    // Add smooth average datasets if enabled
+    if (showSmooth) {
+      const smoothDatasets = datasets.map((d, i) => {
+        const color = window.getDistinctColor(i);
+        return {
+          label: d.label.replace(/ \(avg\)$/, '') + ' (trend)',
+          data: calculateMovingAverage(d.data, windowSize),
+          borderColor: color, // Full opacity for trend line
+          backgroundColor: color,
+          tension: 0.4,
+          borderWidth: 3, // Thick line for visibility
+          borderDash: [], // Solid line for trend
+          pointRadius: 0,
+          fill: false,
+          order: -1 // Draw on top
+        };
+      });
+      datasets = [...datasets, ...smoothDatasets];
+    }
+    
+    chart.data.datasets = datasets;
     chart.update();
   }
   
@@ -861,6 +909,29 @@ function initializeFilterControls() {
           const text = l.querySelector('span')?.textContent.toLowerCase() || '';
           l.style.display = text.includes(q) ? '' : 'none';
         });
+      }
+    });
+  }
+  
+  // Smooth average checkbox - auto-apply when toggled
+  const smoothCheckbox = document.getElementById('showSmoothAvg');
+  if (smoothCheckbox && !smoothCheckbox.hasAttribute('data-listener')) {
+    smoothCheckbox.setAttribute('data-listener', 'true');
+    smoothCheckbox.addEventListener('change', () => {
+      if (window.applyTopicFilter) {
+        window.applyTopicFilter();
+      }
+    });
+  }
+  
+  // Smooth window selector - auto-apply when changed
+  const smoothWindow = document.getElementById('smoothWindow');
+  if (smoothWindow && !smoothWindow.hasAttribute('data-listener')) {
+    smoothWindow.setAttribute('data-listener', 'true');
+    smoothWindow.addEventListener('change', () => {
+      const smoothCheckbox = document.getElementById('showSmoothAvg');
+      if (smoothCheckbox?.checked && window.applyTopicFilter) {
+        window.applyTopicFilter();
       }
     });
   }
@@ -1340,4 +1411,458 @@ document.addEventListener('DOMContentLoaded', () => {
       notification.remove();
     }, 5000);
   }
+})();
+
+// --- Export Functionality ---
+(function() {
+  // Get DOM elements
+  const selectAllFieldsBtn = document.getElementById('selectAllFields');
+  const deselectAllFieldsBtn = document.getElementById('deselectAllFields');
+  const previewExportBtn = document.getElementById('previewExport');
+  const exportCSVBtn = document.getElementById('exportCSV');
+  const exportStatus = document.getElementById('exportStatus');
+  const exportStats = document.getElementById('exportStats');
+  const exportCount = document.getElementById('exportCount');
+  const customDateRange = document.getElementById('customDateRange');
+  const timeFrameRadios = document.querySelectorAll('input[name="timeFrame"]');
+  const exportProgress = document.getElementById('exportProgress');
+  const exportProgressBar = document.getElementById('exportProgressBar');
+  const exportProgressPercent = document.getElementById('exportProgressPercent');
+  const exportProgressMessage = document.getElementById('exportProgressMessage');
+
+  // Field selection handlers
+  if (selectAllFieldsBtn) {
+    selectAllFieldsBtn.addEventListener('click', () => {
+      document.querySelectorAll('.export-field').forEach(cb => cb.checked = true);
+    });
+  }
+
+  if (deselectAllFieldsBtn) {
+    deselectAllFieldsBtn.addEventListener('click', () => {
+      document.querySelectorAll('.export-field').forEach(cb => cb.checked = false);
+    });
+  }
+
+  // Show/hide custom date range
+  timeFrameRadios.forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      if (e.target.value === 'custom') {
+        customDateRange.style.display = 'block';
+      } else {
+        customDateRange.style.display = 'none';
+      }
+    });
+  });
+
+  // Get selected fields
+  function getSelectedFields() {
+    const fields = [];
+    document.querySelectorAll('.export-field:checked').forEach(cb => {
+      fields.push(cb.getAttribute('data-field'));
+    });
+    return fields;
+  }
+
+  // Get time frame parameters
+  function getTimeFrameParams() {
+    const selectedTimeFrame = document.querySelector('input[name="timeFrame"]:checked').value;
+    const params = {};
+    
+    const today = new Date();
+    let startDate = null;
+    
+    switch(selectedTimeFrame) {
+      case 'year':
+        startDate = new Date(today);
+        startDate.setFullYear(today.getFullYear() - 1);
+        params.startDate = startDate.toISOString().split('T')[0];
+        break;
+      case '6months':
+        startDate = new Date(today);
+        startDate.setMonth(today.getMonth() - 6);
+        params.startDate = startDate.toISOString().split('T')[0];
+        break;
+      case '3months':
+        startDate = new Date(today);
+        startDate.setMonth(today.getMonth() - 3);
+        params.startDate = startDate.toISOString().split('T')[0];
+        break;
+      case 'custom':
+        const customStart = document.getElementById('exportStartDate').value;
+        const customEnd = document.getElementById('exportEndDate').value;
+        if (customStart) params.startDate = customStart;
+        if (customEnd) params.endDate = customEnd;
+        break;
+      case 'all':
+      default:
+        // No date restrictions
+        break;
+    }
+    
+    return params;
+  }
+
+  // Debug log area
+  const debugLog = document.createElement('div');
+  debugLog.id = 'exportDebugLog';
+  debugLog.style.cssText = `
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #1e293b;
+    color: #e2e8f0;
+    border-radius: 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    max-height: 300px;
+    overflow-y: auto;
+    display: none;
+  `;
+  if (exportProgress) {
+    exportProgress.parentNode.insertBefore(debugLog, exportProgress.nextSibling);
+  }
+
+  function addDebugLog(message, type = 'info') {
+    const timestamp = new Date().toLocaleTimeString();
+    const color = type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : '#60a5fa';
+    debugLog.innerHTML += `<div style="color:${color};margin-bottom:4px;">[${timestamp}] ${message}</div>`;
+    debugLog.scrollTop = debugLog.scrollHeight;
+    debugLog.style.display = 'block';
+    console.log(`[EXPORT] ${message}`);
+  }
+
+  function clearDebugLog() {
+    debugLog.innerHTML = '';
+    debugLog.style.display = 'none';
+  }
+
+  // Preview export count
+  if (previewExportBtn) {
+    previewExportBtn.addEventListener('click', async () => {
+      try {
+        clearDebugLog();
+        const startTime = Date.now();
+        addDebugLog('🔍 Preview request started', 'info');
+        
+        exportStatus.textContent = 'Loading count...';
+        exportStatus.style.color = '#3b82f6';
+        
+        const timeParams = getTimeFrameParams();
+        addDebugLog(`⏰ Time frame: ${JSON.stringify(timeParams)}`, 'info');
+        
+        const queryParams = new URLSearchParams({
+          ...timeParams,
+          countOnly: 'true'
+        });
+        
+        addDebugLog(`📡 Sending request to /api/export/speeches`, 'info');
+        const fetchStart = Date.now();
+        
+        const response = await fetch(`/api/export/speeches?${queryParams.toString()}`);
+        
+        const fetchTime = Date.now() - fetchStart;
+        addDebugLog(`✅ Response received in ${fetchTime}ms`, 'success');
+        
+        const data = await response.json();
+        
+        if (data.count !== undefined) {
+          const totalTime = Date.now() - startTime;
+          addDebugLog(`📊 Found ${data.count.toLocaleString()} speeches`, 'success');
+          addDebugLog(`⏱️ Total preview time: ${totalTime}ms`, 'success');
+          
+          exportCount.textContent = data.count.toLocaleString();
+          exportStats.style.display = 'block';
+          exportStatus.textContent = '✅ Preview loaded';
+          exportStatus.style.color = '#10b981';
+        } else {
+          throw new Error('Invalid response from server');
+        }
+      } catch (error) {
+        console.error('Error previewing export:', error);
+        addDebugLog(`❌ Error: ${error.message}`, 'error');
+        exportStatus.textContent = '❌ Error loading preview';
+        exportStatus.style.color = '#ef4444';
+      }
+    });
+  }
+
+  // Export to CSV
+  if (exportCSVBtn) {
+    exportCSVBtn.addEventListener('click', async () => {
+      try {
+        clearDebugLog();
+        const totalStartTime = Date.now();
+        addDebugLog('📥 Export request started', 'info');
+        
+        const selectedFields = getSelectedFields();
+        addDebugLog(`📋 Selected ${selectedFields.length} fields: ${selectedFields.join(', ')}`, 'info');
+        
+        if (selectedFields.length === 0) {
+          exportStatus.textContent = '⚠️ Please select at least one field';
+          exportStatus.style.color = '#f59e0b';
+          addDebugLog('⚠️ No fields selected', 'error');
+          return;
+        }
+        
+        exportStatus.textContent = 'Preparing export...';
+        exportStatus.style.color = '#3b82f6';
+        exportProgress.style.display = 'block';
+        exportProgressBar.style.width = '10%';
+        exportProgressPercent.textContent = '10%';
+        exportProgressMessage.textContent = 'Fetching data from server...';
+        
+        const timeParams = getTimeFrameParams();
+        addDebugLog(`⏰ Time frame params: ${JSON.stringify(timeParams)}`, 'info');
+        
+        const queryParams = new URLSearchParams({
+          ...timeParams,
+          fields: selectedFields.join(',')
+        });
+        
+        addDebugLog(`📡 Building request URL...`, 'info');
+        const requestUrl = `/api/export/speeches?${queryParams.toString()}`;
+        addDebugLog(`🔗 Request URL: ${requestUrl}`, 'info');
+        
+        exportProgressBar.style.width = '30%';
+        exportProgressPercent.textContent = '30%';
+        exportProgressMessage.textContent = 'Downloading data...';
+        
+        addDebugLog(`🌐 Sending fetch request to server...`, 'info');
+        const fetchStart = Date.now();
+        
+        const response = await fetch(requestUrl);
+        
+        const fetchTime = Date.now() - fetchStart;
+        addDebugLog(`✅ Server response received in ${fetchTime}ms (${(fetchTime/1000).toFixed(2)}s)`, 'success');
+        
+        if (!response.ok) {
+          addDebugLog(`❌ Server returned error: ${response.status} ${response.statusText}`, 'error');
+          throw new Error('Export failed: ' + response.statusText);
+        }
+        
+        const contentLength = response.headers.get('content-length');
+        if (contentLength) {
+          const sizeMB = (parseInt(contentLength) / 1024 / 1024).toFixed(2);
+          addDebugLog(`📦 Response size: ${sizeMB} MB`, 'info');
+        }
+        
+        exportProgressBar.style.width = '60%';
+        exportProgressPercent.textContent = '60%';
+        exportProgressMessage.textContent = 'Processing CSV...';
+        
+        addDebugLog(`💾 Converting response to blob...`, 'info');
+        const blobStart = Date.now();
+        
+        const blob = await response.blob();
+        
+        const blobTime = Date.now() - blobStart;
+        const blobSizeMB = (blob.size / 1024 / 1024).toFixed(2);
+        addDebugLog(`✅ Blob created in ${blobTime}ms - Size: ${blobSizeMB} MB`, 'success');
+        
+        exportProgressBar.style.width = '90%';
+        exportProgressPercent.textContent = '90%';
+        exportProgressMessage.textContent = 'Preparing download...';
+        
+        addDebugLog(`🔗 Creating download link...`, 'info');
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        // Generate filename with timestamp
+        const timestamp = new Date().toISOString().split('T')[0];
+        const timeFrame = document.querySelector('input[name="timeFrame"]:checked').value;
+        const filename = `eu_speeches_${timeFrame}_${timestamp}.csv`;
+        a.download = filename;
+        
+        addDebugLog(`📁 Filename: ${filename}`, 'info');
+        
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        exportProgressBar.style.width = '100%';
+        exportProgressPercent.textContent = '100%';
+        exportProgressMessage.textContent = 'Export complete!';
+        
+        const totalTime = Date.now() - totalStartTime;
+        addDebugLog(`✅ Export completed successfully!`, 'success');
+        addDebugLog(`⏱️ Total export time: ${totalTime}ms (${(totalTime/1000).toFixed(2)}s)`, 'success');
+        
+        exportStatus.textContent = '✅ Export completed';
+        exportStatus.style.color = '#10b981';
+        
+        // Hide progress bar after 3 seconds
+        setTimeout(() => {
+          exportProgress.style.display = 'none';
+          exportProgressBar.style.width = '0%';
+        }, 3000);
+        
+      } catch (error) {
+        console.error('Error exporting to CSV:', error);
+        addDebugLog(`❌ Export failed: ${error.message}`, 'error');
+        addDebugLog(`📚 Stack trace: ${error.stack}`, 'error');
+        exportStatus.textContent = '❌ Export failed: ' + error.message;
+        exportStatus.style.color = '#ef4444';
+        exportProgress.style.display = 'none';
+      }
+    });
+  }
+})();
+
+// --- Memory Monitor ---
+(function() {
+  const memoryMonitor = document.getElementById('memoryMonitor');
+  const memoryToggle = document.getElementById('memoryToggle');
+  const closeMemoryMonitor = document.getElementById('closeMemoryMonitor');
+  
+  let memoryInterval = null;
+  let isMonitoring = false;
+  
+  // Format bytes to human readable
+  function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+  
+  // Format uptime
+  function formatUptime(seconds) {
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+    if (hours > 0) return `${hours}h ${minutes}m ${secs}s`;
+    if (minutes > 0) return `${minutes}m ${secs}s`;
+    return `${secs}s`;
+  }
+  
+  // Update memory display
+  function updateMemoryDisplay() {
+    if (!isMonitoring) return;
+    
+    // Get memory usage from performance API
+    if (performance.memory) {
+      const mem = performance.memory;
+      const heapUsed = mem.usedJSHeapSize;
+      const heapTotal = mem.totalJSHeapSize;
+      const heapLimit = mem.jsHeapSizeLimit;
+      
+      document.getElementById('heapUsed').textContent = formatBytes(heapUsed);
+      document.getElementById('heapTotal').textContent = formatBytes(heapTotal);
+      document.getElementById('heapLimit').textContent = formatBytes(heapLimit);
+      document.getElementById('heapPercent').textContent = ((heapUsed / heapLimit) * 100).toFixed(1) + '%';
+      
+      // Color code heap percentage
+      const heapPercentEl = document.getElementById('heapPercent');
+      const percent = (heapUsed / heapLimit) * 100;
+      if (percent > 80) {
+        heapPercentEl.style.color = '#ff4444'; // Red
+      } else if (percent > 60) {
+        heapPercentEl.style.color = '#ffaa00'; // Orange
+      } else {
+        heapPercentEl.style.color = '#00ff00'; // Green
+      }
+    } else {
+      document.getElementById('heapUsed').textContent = 'N/A';
+      document.getElementById('heapTotal').textContent = 'N/A';
+      document.getElementById('heapLimit').textContent = 'N/A';
+      document.getElementById('heapPercent').textContent = 'N/A';
+    }
+    
+    // Get additional memory info from navigator
+    if (navigator.deviceMemory) {
+      document.getElementById('external').textContent = navigator.deviceMemory + ' GB';
+    } else {
+      document.getElementById('external').textContent = 'N/A';
+    }
+    
+    // Get process memory info (if available)
+    if (window.performance && window.performance.memory) {
+      const mem = window.performance.memory;
+      document.getElementById('arrayBuffers').textContent = formatBytes(mem.usedJSHeapSize - mem.totalJSHeapSize);
+    } else {
+      document.getElementById('arrayBuffers').textContent = 'N/A';
+    }
+    
+    // RSS (Resident Set Size) - approximate
+    if (performance.memory) {
+      const mem = performance.memory;
+      document.getElementById('rss').textContent = formatBytes(mem.jsHeapSizeLimit);
+    } else {
+      document.getElementById('rss').textContent = 'N/A';
+    }
+    
+    // Uptime
+    const uptime = performance.now() / 1000;
+    document.getElementById('uptime').textContent = formatUptime(uptime);
+    
+    // GC Count (approximate)
+    if (window.gc) {
+      document.getElementById('gcCount').textContent = 'Available';
+    } else {
+      document.getElementById('gcCount').textContent = 'N/A';
+    }
+  }
+  
+  // Start monitoring
+  function startMonitoring() {
+    if (isMonitoring) return;
+    
+    isMonitoring = true;
+    memoryMonitor.style.display = 'block';
+    memoryToggle.style.display = 'none';
+    
+    // Update immediately
+    updateMemoryDisplay();
+    
+    // Update every 2 seconds
+    memoryInterval = setInterval(updateMemoryDisplay, 2000);
+    
+    console.log('🧠 Memory monitoring started');
+  }
+  
+  // Stop monitoring
+  function stopMonitoring() {
+    if (!isMonitoring) return;
+    
+    isMonitoring = false;
+    memoryMonitor.style.display = 'none';
+    memoryToggle.style.display = 'flex';
+    
+    if (memoryInterval) {
+      clearInterval(memoryInterval);
+      memoryInterval = null;
+    }
+    
+    console.log('🧠 Memory monitoring stopped');
+  }
+  
+  // Event listeners
+  if (memoryToggle) {
+    memoryToggle.addEventListener('click', startMonitoring);
+  }
+  
+  if (closeMemoryMonitor) {
+    closeMemoryMonitor.addEventListener('click', stopMonitoring);
+  }
+  
+  // Auto-start monitoring if memory usage is high
+  if (performance.memory) {
+    const mem = performance.memory;
+    const heapPercent = (mem.usedJSHeapSize / mem.jsHeapSizeLimit) * 100;
+    
+    if (heapPercent > 50) {
+      console.log('🧠 High memory usage detected, auto-starting monitor');
+      setTimeout(startMonitoring, 1000);
+    }
+  }
+  
+  // Expose functions globally for debugging
+  window.startMemoryMonitor = startMonitoring;
+  window.stopMemoryMonitor = stopMonitoring;
 })();

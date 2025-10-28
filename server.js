@@ -2010,6 +2010,250 @@ if (process.argv.includes('--parse-recent-speeches')) {
       });
     });
 
+    // Endpoint: Export speeches to CSV
+    app.get('/api/export/speeches', (req, res) => {
+      const requestStartTime = Date.now();
+      console.log('📊 [EXPORT] ========================================');
+      console.log('📊 [EXPORT] Export request received');
+      
+      const { startDate, endDate, fields, countOnly } = req.query;
+      console.log(`📊 [EXPORT] Query params - startDate: ${startDate}, endDate: ${endDate}, fields: ${fields ? fields.substring(0, 50) + '...' : 'default'}, countOnly: ${countOnly}`);
+      
+      // Build WHERE clause for date filtering
+      const params = [];
+      let whereClauses = [];
+      
+      if (startDate) {
+        whereClauses.push('s.activity_date >= ?');
+        params.push(startDate);
+        console.log(`📊 [EXPORT] Adding start date filter: ${startDate}`);
+      }
+      
+      if (endDate) {
+        whereClauses.push('s.activity_date <= ?');
+        params.push(endDate);
+        console.log(`📊 [EXPORT] Adding end date filter: ${endDate}`);
+      }
+      
+      const whereClause = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
+      console.log(`📊 [EXPORT] WHERE clause: ${whereClause || '(none - all data)'}`);
+      
+      // If only count is requested
+      if (countOnly === 'true') {
+        console.log('📊 [EXPORT] Count-only request');
+        const countSql = `
+          SELECT COUNT(*) as count
+          FROM individual_speeches i
+          LEFT JOIN sittings s ON i.sitting_id = s.id
+          ${whereClause}
+        `;
+        
+        console.log('📊 [EXPORT] Executing count query...');
+        const queryStartTime = Date.now();
+        
+        db.get(countSql, params, (err, row) => {
+          const queryTime = Date.now() - queryStartTime;
+          const totalTime = Date.now() - requestStartTime;
+          
+          if (err) {
+            console.error('❌ [EXPORT] Error counting speeches:', err);
+            console.log(`⏱️ [EXPORT] Failed after ${totalTime}ms`);
+            return res.status(500).json({ error: err.message });
+          }
+          console.log(`✅ [EXPORT] Count query completed: ${row.count} speeches`);
+          console.log(`⏱️ [EXPORT] Query time: ${queryTime}ms`);
+          console.log(`⏱️ [EXPORT] Total count request time: ${totalTime}ms`);
+          res.json({ count: row.count });
+        });
+        return;
+      }
+      
+      // Parse requested fields
+      console.log('📊 [EXPORT] Full CSV export request');
+      const requestedFields = fields ? fields.split(',') : [
+        // Default fields if none specified
+        'id', 'sitting_id', 'date', 'speaker_name', 'political_group', 
+        'title', 'speech_content', 'language', 'macro_topic', 'specific_focus',
+        'topic', 'country', 'mep_id'
+      ];
+      
+      console.log(`📊 [EXPORT] Requested ${requestedFields.length} fields: ${requestedFields.join(', ')}`);
+      
+      // Map field names to SQL columns
+      const fieldMapping = {
+        // Basic Information
+        'id': 'i.id',
+        'sitting_id': 'i.sitting_id',
+        'date': 's.activity_date',
+        'activity_start_date': 's.activity_start_date',
+        'activity_type': 's.activity_type',
+        'speech_order': 'i.speech_order',
+        'created_at': 'i.created_at',
+        
+        // Speaker Information
+        'speaker_name': 'i.speaker_name',
+        'mep_id': 'i.mep_id',
+        'country': 'm.country',
+        'political_group': 'COALESCE(i.political_group_std, i.political_group)',
+        'political_group_raw': 'i.political_group_raw',
+        'political_group_std': 'i.political_group_std',
+        'political_group_kind': 'i.political_group_kind',
+        'political_group_reason': 'i.political_group_reason',
+        
+        // Content
+        'title': 'i.title',
+        'speech_content': 'i.speech_content',
+        'language': 'i.language',
+        'sitting_content': 's.content',
+        'sitting_label': 's.label',
+        'sitting_type': 's.type',
+        'doc_identifier': 's.docIdentifier',
+        'notation_id': 's.notationId',
+        
+        // Topic Classification
+        'topic': 'i.topic',
+        'macro_topic': 'i.macro_topic',
+        'specific_focus': 'i.macro_specific_focus',
+        'macro_confidence': 'i.macro_confidence',
+        'macro_classified_by': 'i.macro_classified_by',
+        'macro_classified_at': 'i.macro_classified_at',
+        'macro_classification_cost': 'i.macro_classification_cost'
+      };
+      
+      // Build SELECT clause
+      const selectFields = requestedFields
+        .filter(f => fieldMapping[f])
+        .map(f => `${fieldMapping[f]} as ${f}`);
+      
+      console.log(`📊 [EXPORT] Mapped to ${selectFields.length} SQL fields`);
+      
+      if (selectFields.length === 0) {
+        console.error('❌ [EXPORT] No valid fields selected');
+        return res.status(400).json({ error: 'No valid fields selected' });
+      }
+      
+      const baseSql = `
+        SELECT ${selectFields.join(', ')}
+        FROM individual_speeches i
+        LEFT JOIN sittings s ON i.sitting_id = s.id
+        LEFT JOIN meps m ON i.mep_id = m.id
+        ${whereClause}
+        ORDER BY s.activity_date DESC, i.speech_order ASC
+      `;
+      
+      console.log(`📊 [EXPORT] Executing batch streaming export...`);
+      console.log(`📊 [EXPORT] SQL query length: ${baseSql.length} chars`);
+      
+      // Helper function to escape CSV values
+      const escapeCSV = (value) => {
+        if (value === null || value === undefined) return '';
+        const str = String(value);
+        // If contains comma, quote, or newline, wrap in quotes and escape quotes
+        if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+          return '"' + str.replace(/"/g, '""') + '"';
+        }
+        return str;
+      };
+      
+      // Set response headers for streaming CSV
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="eu_speeches_export.csv"');
+      
+      // Write CSV header with BOM for Excel compatibility
+      const headers = requestedFields.join(',');
+      res.write('\ufeff' + headers + '\n');
+      
+      console.log('📊 [EXPORT] Starting batch streaming export...');
+      const queryStartTime = Date.now();
+      
+      const BATCH_SIZE = 5000; // Process 5000 rows at a time for better performance
+      let offset = 0;
+      let totalRowCount = 0;
+      let totalBytesWritten = 0;
+      let lastLogTime = Date.now();
+      let hasError = false;
+      
+      // Recursive function to process batches with backpressure handling
+      function processBatch() {
+        if (hasError) return;
+        
+        const batchSql = baseSql + ` LIMIT ${BATCH_SIZE} OFFSET ${offset}`;
+        
+        db.all(batchSql, params, (err, rows) => {
+          if (err) {
+            console.error('❌ [EXPORT] Error fetching batch:', err);
+            hasError = true;
+            if (!res.headersSent) {
+              return res.status(500).json({ error: err.message });
+            }
+            return res.end();
+          }
+          
+          // If no rows, we're done
+          if (rows.length === 0) {
+            const queryTime = Date.now() - queryStartTime;
+            const totalTime = Date.now() - requestStartTime;
+            const sizeMB = (totalBytesWritten / 1024 / 1024).toFixed(2);
+            const avgRate = totalRowCount / (queryTime / 1000);
+            
+            // Finalize the response
+            res.end();
+            
+            console.log(`✅ [EXPORT] Stream completed successfully`);
+            console.log(`📊 [EXPORT] Total rows exported: ${totalRowCount}`);
+            console.log(`📦 [EXPORT] Total size: ${totalBytesWritten} bytes (${sizeMB} MB)`);
+            console.log(`⏱️ [EXPORT] Query + streaming time: ${queryTime}ms (${(queryTime/1000).toFixed(2)}s)`);
+            console.log(`📈 [EXPORT] Average rate: ${avgRate.toFixed(1)} rows/sec`);
+            console.log('📊 [EXPORT] ========================================');
+            return;
+          }
+          
+          // Convert batch to CSV - optimized for speed
+          let batchCSV = '';
+          for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            for (let j = 0; j < requestedFields.length; j++) {
+              if (j > 0) batchCSV += ',';
+              batchCSV += escapeCSV(row[requestedFields[j]]);
+            }
+            batchCSV += '\n';
+          }
+          
+          // Update counters
+          totalRowCount += rows.length;
+          totalBytesWritten += batchCSV.length;
+          offset += rows.length;
+          
+          // Log progress every 5000 rows
+          const now = Date.now();
+          if (totalRowCount % 5000 === 0 || now - lastLogTime > 5000) {
+            const elapsed = (now - queryStartTime) / 1000;
+            const rate = totalRowCount / elapsed;
+            const sizeMB = (totalBytesWritten / 1024 / 1024).toFixed(2);
+            console.log(`📊 [EXPORT] Progress: ${totalRowCount} rows, ${sizeMB} MB, ${rate.toFixed(1)} rows/sec`);
+            lastLogTime = now;
+          }
+          
+          // Write batch with backpressure handling
+          const canContinue = res.write(batchCSV);
+          
+          if (!canContinue) {
+            // Buffer is full, wait for drain event
+            res.once('drain', () => {
+              // Continue processing after drain
+              setImmediate(processBatch);
+            });
+          } else {
+            // Continue immediately
+            setImmediate(processBatch);
+          }
+        });
+      }
+      
+      // Start processing batches
+      processBatch();
+    });
+
     // Endpoint: fetch and parse table of contents for a given date
     app.get('/api/speech-toc', async (req, res) => {
       const { date } = req.query;

@@ -23,6 +23,7 @@
       <button class="tab active" data-tab="meps">MEPs</button>
       <button class="tab" data-tab="speeches">Parliament Sittings</button>
       <button class="tab" data-tab="analytics">Descriptive Analytics</button>
+      <button class="tab" data-tab="export">Export</button>
     </nav>
 
     <!-- MEPs tab content -->
@@ -186,6 +187,17 @@
             Quarterly
           </label>
         </div>
+        <div style="border-left:2px solid #cbd5e1; padding-left:1rem; display:flex; align-items:center; gap:8px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="showSmoothAvg" style="cursor:pointer;">
+            <span style="font-weight:500;color:#374151">Show Smooth Averages</span>
+          </label>
+          <select id="smoothWindow" style="padding:4px 8px; border:1px solid #cbd5e1; border-radius:4px; font-size:13px;">
+            <option value="3">3-period</option>
+            <option value="6" selected>6-period</option>
+            <option value="12">12-period</option>
+          </select>
+        </div>
         <span style="color:#6b7280">(Always showing full 10-year range)</span>
       </div>
       <div class="charts-container">
@@ -239,14 +251,336 @@
         </table>
       </div>
     </div>
+
+    <!-- Export tab content -->
+    <div id="export" class="tab-content">
+      <h2>Export Speech Data</h2>
+      <div style="margin-bottom:1.5rem;color:#555">
+        Export individual speeches to CSV format. Select the data you want to include and choose a time frame.
+      </div>
+
+      <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:1.5rem; margin-bottom:1.5rem;">
+        <h3 style="margin:0 0 1rem 0; color:#1e293b;">📊 Export Settings</h3>
+        
+        <!-- Field Selection -->
+        <div style="margin-bottom:1.5rem;">
+          <h4 style="margin:0 0 0.75rem 0; color:#475569; font-size:0.95rem;">Select Fields to Export:</h4>
+          
+          <!-- Basic Info -->
+          <div style="margin-bottom:1rem;">
+            <h5 style="margin:0 0 0.5rem 0; color:#64748b; font-size:0.85rem; font-weight:600;">📋 Basic Information</h5>
+            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:0.5rem;">
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="id" checked>
+                <span>Speech ID</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="sitting_id" checked>
+                <span>Sitting ID</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="date" checked>
+                <span>Activity Date</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="activity_start_date">
+                <span>Activity Start Date</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="activity_type">
+                <span>Activity Type</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="speech_order">
+                <span>Speech Order</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="created_at">
+                <span>Created At</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Speaker Info -->
+          <div style="margin-bottom:1rem;">
+            <h5 style="margin:0 0 0.5rem 0; color:#64748b; font-size:0.85rem; font-weight:600;">👤 Speaker Information</h5>
+            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:0.5rem;">
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="speaker_name" checked>
+                <span>Speaker Name</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="mep_id">
+                <span>MEP ID</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="country">
+                <span>Country</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="political_group" checked>
+                <span>Political Group (Standardized)</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="political_group_raw">
+                <span>Political Group (Raw)</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="political_group_kind">
+                <span>Political Group Kind</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="political_group_reason">
+                <span>Political Group Reason</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Content -->
+          <div style="margin-bottom:1rem;">
+            <h5 style="margin:0 0 0.5rem 0; color:#64748b; font-size:0.85rem; font-weight:600;">📝 Content</h5>
+            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:0.5rem;">
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="title" checked>
+                <span>Title</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="speech_content" checked>
+                <span>Speech Content (Text)</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="language" checked>
+                <span>Language</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="sitting_content">
+                <span>Sitting HTML Content</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="sitting_label">
+                <span>Sitting Label</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="doc_identifier">
+                <span>Document Identifier</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="notation_id">
+                <span>Notation ID</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Classification -->
+          <div style="margin-bottom:1rem;">
+            <h5 style="margin:0 0 0.5rem 0; color:#64748b; font-size:0.85rem; font-weight:600;">🏷️ Topic Classification</h5>
+            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:0.5rem;">
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="topic">
+                <span>Topic (Original)</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="macro_topic" checked>
+                <span>Macro Topic</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="specific_focus" checked>
+                <span>Specific Focus</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="macro_confidence">
+                <span>Classification Confidence</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="macro_classified_by">
+                <span>Classified By (Model)</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="macro_classified_at">
+                <span>Classified At (Timestamp)</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <input type="checkbox" class="export-field" data-field="macro_classification_cost">
+                <span>Classification Cost ($)</span>
+              </label>
+            </div>
+          </div>
+
+          <div style="margin-top:0.5rem; display:flex; gap:0.5rem;">
+            <button id="selectAllFields" style="padding:6px 12px; font-size:13px; background:#3b82f6; color:white; border:none; border-radius:4px; cursor:pointer;">Select All</button>
+            <button id="deselectAllFields" style="padding:6px 12px; font-size:13px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">Deselect All</button>
+          </div>
+        </div>
+
+        <!-- Time Frame Selection -->
+        <div style="margin-bottom:1.5rem;">
+          <h4 style="margin:0 0 0.75rem 0; color:#475569; font-size:0.95rem;">Time Frame:</h4>
+          <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:center;">
+            <label style="display:flex; align-items:center; gap:6px;">
+              <input type="radio" name="timeFrame" value="all" checked>
+              <span style="font-weight:500;">All Time</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:6px;">
+              <input type="radio" name="timeFrame" value="year">
+              <span style="font-weight:500;">Last Year</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:6px;">
+              <input type="radio" name="timeFrame" value="6months">
+              <span style="font-weight:500;">Last 6 Months</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:6px;">
+              <input type="radio" name="timeFrame" value="3months">
+              <span style="font-weight:500;">Last 3 Months</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:6px;">
+              <input type="radio" name="timeFrame" value="custom">
+              <span style="font-weight:500;">Custom Range</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Custom Date Range -->
+        <div id="customDateRange" style="margin-bottom:1.5rem; display:none;">
+          <h4 style="margin:0 0 0.75rem 0; color:#475569; font-size:0.95rem;">Custom Date Range:</h4>
+          <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:6px;">
+              <span>From:</span>
+              <input type="date" id="exportStartDate" style="padding:6px 10px; border:1px solid #cbd5e1; border-radius:4px;">
+            </label>
+            <label style="display:flex; align-items:center; gap:6px;">
+              <span>To:</span>
+              <input type="date" id="exportEndDate" style="padding:6px 10px; border:1px solid #cbd5e1; border-radius:4px;">
+            </label>
+          </div>
+        </div>
+
+        <!-- Export Stats -->
+        <div id="exportStats" style="background:#fff; border:1px solid #e2e8f0; border-radius:6px; padding:1rem; margin-bottom:1rem; display:none;">
+          <div style="font-size:14px; color:#64748b;">
+            <strong style="color:#334155;">Export Preview:</strong>
+            <div style="margin-top:0.5rem;">
+              <span id="exportCount">0</span> speeches will be exported
+            </div>
+          </div>
+        </div>
+
+        <!-- Export Buttons -->
+        <div style="display:flex; gap:1rem; align-items:center;">
+          <button id="previewExport" style="padding:10px 20px; font-size:14px; font-weight:600; background:#3b82f6; color:white; border:none; border-radius:6px; cursor:pointer; box-shadow:0 2px 4px rgba(59,130,246,0.3);">
+            📊 Preview Count
+          </button>
+          <button id="exportCSV" style="padding:10px 20px; font-size:14px; font-weight:600; background:#10b981; color:white; border:none; border-radius:6px; cursor:pointer; box-shadow:0 2px 4px rgba(16,185,129,0.3);">
+            ⬇️ Export to CSV
+          </button>
+          <div id="exportStatus" style="margin-left:1rem; font-size:14px; font-weight:500;"></div>
+        </div>
+      </div>
+
+      <!-- Export Progress -->
+      <div id="exportProgress" style="display:none; background:#f0f9ff; border:1px solid #0ea5e9; border-radius:8px; padding:1.5rem; margin-bottom:1.5rem;">
+        <h3 style="margin:0 0 1rem 0; color:#0369a1; font-size:1.1rem;">⏳ Exporting Data...</h3>
+        <div style="background:#e0f2fe; border-radius:8px; height:32px; position:relative; overflow:hidden; margin-bottom:0.75rem;">
+          <div id="exportProgressBar" style="background:#0ea5e9; height:100%; width:0%; transition:width 0.3s; border-radius:8px; display:flex; align-items:center; justify-content:center;">
+            <span id="exportProgressPercent" style="color:white; font-weight:bold; font-size:14px; text-shadow:0 1px 2px rgba(0,0,0,0.2);"></span>
+          </div>
+        </div>
+        <div id="exportProgressMessage" style="color:#0369a1; font-size:14px; text-align:center;"></div>
+      </div>
+    </div>
   </div>
 
   <footer style="text-align: center; padding: 2rem; background: var(--eu-blue); color: white; margin-top: 2rem;">
     <p>This is an unofficial tool for exploring EU Parliament data. Not affiliated with the European Union.</p>
   </footer>
 
+  <!-- Memory Monitor Widget -->
+  <div id="memoryMonitor" style="
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1001;
+    background: rgba(0, 0, 0, 0.9);
+    color: #00ff00;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    min-width: 280px;
+    max-width: 350px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    backdrop-filter: blur(10px);
+    display: none;
+  ">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 4px;">
+      <span style="font-weight: bold; color: #00ff00;">🧠 Memory Monitor</span>
+      <button id="closeMemoryMonitor" style="background: none; border: none; color: #ff4444; cursor: pointer; font-size: 14px; padding: 0;">✕</button>
+    </div>
+    
+    <div style="margin-bottom: 6px;">
+      <span style="color: #ffaa00;">📊 Heap Used:</span>
+      <span id="heapUsed" style="color: #00ff00;">-</span>
+    </div>
+    <div style="margin-bottom: 6px;">
+      <span style="color: #ffaa00;">📈 Heap Total:</span>
+      <span id="heapTotal" style="color: #00ff00;">-</span>
+    </div>
+    <div style="margin-bottom: 6px;">
+      <span style="color: #ffaa00;">🎯 Heap Limit:</span>
+      <span id="heapLimit" style="color: #00ff00;">-</span>
+    </div>
+    <div style="margin-bottom: 6px;">
+      <span style="color: #ffaa00;">⚡ External:</span>
+      <span id="external" style="color: #00ff00;">-</span>
+    </div>
+    <div style="margin-bottom: 6px;">
+      <span style="color: #ffaa00;">🔄 Array Buffers:</span>
+      <span id="arrayBuffers" style="color: #00ff00;">-</span>
+    </div>
+    <div style="margin-bottom: 6px;">
+      <span style="color: #ffaa00;">📱 RSS:</span>
+      <span id="rss" style="color: #00ff00;">-</span>
+    </div>
+    <div style="margin-bottom: 6px;">
+      <span style="color: #ffaa00;">💾 Used Heap %:</span>
+      <span id="heapPercent" style="color: #00ff00;">-</span>
+    </div>
+    <div style="margin-bottom: 6px;">
+      <span style="color: #ffaa00;">⏱️ Uptime:</span>
+      <span id="uptime" style="color: #00ff00;">-</span>
+    </div>
+    <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #333;">
+      <span style="color: #ffaa00;">🔄 GC Count:</span>
+      <span id="gcCount" style="color: #00ff00;">-</span>
+    </div>
+  </div>
+
+  <!-- Memory Monitor Toggle Button -->
+  <div id="memoryToggle" style="
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.8);
+    color: #00ff00;
+    border: 1px solid #333;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    transition: all 0.3s ease;
+  " onmouseover="this.style.transform='scale(1.1)'; this.style.background='rgba(0, 0, 0, 0.9)'" 
+     onmouseout="this.style.transform='scale(1)'; this.style.background='rgba(0, 0, 0, 0.8)'">
+    🧠
+  </div>
+
   <!-- Refresh Button -->
-  <div id="refreshButton" style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
+  <div id="refreshButton" style="position: fixed; bottom: 20px; right: 80px; z-index: 1000;">
     <button id="refreshDataBtn" style="
       background: var(--eu-blue);
       color: white;
