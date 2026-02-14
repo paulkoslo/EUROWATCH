@@ -1,4 +1,4 @@
-s get  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -204,7 +204,9 @@ s get  <!DOCTYPE html>
                     <h2>Parliamentary Speeches</h2>
                     <div class="speeches-count" id="speeches-count"></div>
                 </div>
-                
+                <div id="macro-topic-filter-banner" style="display:none; margin-bottom: 1rem; padding: 0.75rem 1rem; background: #e0f2fe; border-radius: 8px; color: #0369a1; font-size: 0.95rem;">
+                    <strong>Filtered by macro topic:</strong> <span id="macro-topic-filter-label"></span>
+                </div>
                 <div id="speeches-list"></div>
                 
                 <div class="pagination" id="pagination" style="display: none;">
@@ -222,24 +224,37 @@ s get  <!DOCTYPE html>
         const limit = 20;
         let totalSpeeches = 0;
         let currentPage = 1;
-        const totalPages = Math.ceil(totalSpeeches / limit);
+        let macroTopicFilter = null;
 
-        // Get MEP ID from URL
+        // Get MEP ID and optional macro_topic from URL
         function getMepIdFromUrl() {
             const urlParams = new URLSearchParams(window.location.search);
             return urlParams.get('id');
+        }
+        function getMacroTopicFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const t = urlParams.get('macro_topic');
+            return (t && t.trim()) ? t.trim() : null;
+        }
+
+        // Build speeches API URL with optional macro_topic filter
+        function speechesApiUrl() {
+            const params = new URLSearchParams({ limit: limit, offset: currentOffset });
+            if (macroTopicFilter) params.set('macro_topic', macroTopicFilter);
+            return `/api/meps/${currentMepId}/speeches?${params.toString()}`;
         }
 
         // Load MEP details and speeches
         async function loadMepDetails() {
             currentMepId = getMepIdFromUrl();
+            macroTopicFilter = getMacroTopicFromUrl();
             if (!currentMepId) {
                 showError('No MEP ID provided');
                 return;
             }
 
             try {
-                const response = await fetch(`/api/meps/${currentMepId}/speeches?limit=${limit}&offset=${currentOffset}`);
+                const response = await fetch(speechesApiUrl());
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -248,6 +263,7 @@ s get  <!DOCTYPE html>
                 displayMepDetails(data);
                 displaySpeeches(data.speeches);
                 updatePagination(data.pagination);
+                displayMacroTopicFilter(data.macroTopicFilter);
                 
             } catch (error) {
                 console.error('Error loading MEP details:', error);
@@ -258,14 +274,14 @@ s get  <!DOCTYPE html>
         // Display MEP information
         function displayMepDetails(data) {
             const mep = data.mep;
-            
-            document.getElementById('mep-name').textContent = `${mep.givenName} ${mep.familyName}`;
+            const name = (mep.givenName && mep.familyName) ? `${mep.givenName} ${mep.familyName}` : (mep.label || 'Unknown');
+            document.getElementById('mep-name').textContent = name;
             
             const mepInfo = document.getElementById('mep-info');
             mepInfo.innerHTML = `
-                <div class="mep-info-item">🇪🇺 ${mep.country}</div>
-                <div class="mep-info-item">🏛️ ${mep.politicalGroup}</div>
-                <div class="mep-info-item">👤 ${mep.label}</div>
+                <div class="mep-info-item">🇪🇺 ${mep.country || ''}</div>
+                <div class="mep-info-item">🏛️ ${mep.politicalGroup || mep.political_group || ''}</div>
+                <div class="mep-info-item">👤 ${mep.label || ''}</div>
             `;
             
             document.getElementById('speeches-count').textContent = `${data.pagination.total} speeches`;
@@ -274,12 +290,27 @@ s get  <!DOCTYPE html>
             document.getElementById('mep-details').style.display = 'block';
         }
 
+        // Show banner when viewing speeches filtered by macro topic (from Top MEPs link)
+        function displayMacroTopicFilter(topic) {
+            const banner = document.getElementById('macro-topic-filter-banner');
+            const label = document.getElementById('macro-topic-filter-label');
+            if (topic && banner && label) {
+                label.textContent = topic;
+                banner.style.display = 'block';
+            } else if (banner) {
+                banner.style.display = 'none';
+            }
+        }
+
         // Display speeches list
         function displaySpeeches(speeches) {
             const speechesList = document.getElementById('speeches-list');
             
             if (speeches.length === 0) {
-                speechesList.innerHTML = '<div class="no-speeches">No speeches found for this MEP.</div>';
+                const msg = macroTopicFilter
+                    ? `No speeches found for this MEP with macro topic "${macroTopicFilter}".`
+                    : 'No speeches found for this MEP.';
+                speechesList.innerHTML = '<div class="no-speeches">' + msg + '</div>';
                 return;
             }
             

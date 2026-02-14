@@ -1,3 +1,19 @@
+// EP term number for Europarl URLs (matches parliament-fetch.js)
+function getSessionNumber(date) {
+  if (!date) return 10;
+  if (date >= '2024-07-16') return 10;
+  if (date >= '2019-07-02') return 9;
+  if (date >= '2014-07-01') return 8;
+  if (date >= '2009-07-14') return 7;
+  if (date >= '2004-07-20') return 6;
+  if (date >= '1999-07-20') return 5;
+  if (date >= '1994-07-19') return 4;
+  if (date >= '1989-07-25') return 3;
+  if (date >= '1984-07-24') return 2;
+  if (date >= '1979-07-17') return 1;
+  return 1;
+}
+
 // Utility: shorten ID and prettify types
 function shortId(id) {
   // Extracts the last part of an ID string, typically after the last '/'
@@ -205,29 +221,21 @@ function renderMarkdown(md) {
 (async () => {
   let speech = null;
   
-  // First try to get speech data from sessionStorage
-  const recStr = sessionStorage.getItem('speechRecord');
-  if (recStr) {
-    speech = JSON.parse(recStr);
-  } else {
-    // If no sessionStorage data, try to get speech ID from URL parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    const speechId = urlParams.get('id');
-    
-    if (speechId) {
-      try {
-        console.log(`🔍 Loading speech data for ID: ${speechId}`);
-        const response = await fetch(`/api/speeches/${encodeURIComponent(speechId)}`);
-        if (response.ok) {
-          speech = await response.json();
-          console.log(`✅ Loaded speech data:`, speech);
-        } else {
-          console.error(`❌ Failed to load speech data: ${response.status}`);
-        }
-      } catch (error) {
-        console.error('❌ Error loading speech data:', error);
-      }
+  const urlParams = new URLSearchParams(window.location.search);
+  const speechId = urlParams.get('id');
+
+  // Prefer URL id — fetch full sitting (with content) when opening
+  if (speechId) {
+    try {
+      const response = await fetch(`/api/speeches/${encodeURIComponent(speechId)}`);
+      if (response.ok) speech = await response.json();
+    } catch (error) {
+      console.error('❌ Error loading speech data:', error);
     }
+  }
+  if (!speech) {
+    const recStr = sessionStorage.getItem('speechRecord');
+    if (recStr) speech = JSON.parse(recStr);
   }
   
   if (!speech) {
@@ -241,25 +249,23 @@ function renderMarkdown(md) {
   document.getElementById('speechId').textContent = shortId(speech.id);
   document.getElementById('speechType').textContent = prettyType(speech.type);
 
+  // Sittings use activity_date; ensure we have a date for content fetch
+  const sittingDate = speech.date || speech.activity_date || (speech.id && String(speech.id).startsWith('sitting-') ? String(speech.id).replace(/^sitting-/, '') : null);
+
   // Title
-  // Display the speech title or 'Untitled' if not available
-  const sittingTitle = speech.date ? `Sitting of ${speech.date}` : 'Sitting';
+  const sittingTitle = sittingDate ? `Sitting of ${sittingDate}` : 'Sitting';
   document.title = sittingTitle;
   document.getElementById('speechTitle').textContent = sittingTitle;
+  document.getElementById('speechDate').textContent = sittingDate || '';
 
-  // Date
-  // Display the speech date or an empty string if not available
-  document.getElementById('speechDate').textContent = speech.date || '';
-
-  // --- Main Content (from Europarl HTML, first 2000 chars) ---
+  // --- Main Content: fetch when opening a sitting ---
   const contentMainEl = document.getElementById('speechContentMain');
   const htmlLinkEl = document.getElementById('speechHtmlLink');
   const contentSection = document.getElementById('speechContentSection');
-  if (speech.date) {
-    // Pass both date and speechId to get specific speech content from database
-    const apiUrl = speech.id ? 
-      `/api/speech-html-content?date=${speech.date}&speechId=${encodeURIComponent(speech.id)}` :
-      `/api/speech-html-content?date=${speech.date}`;
+  if (sittingDate) {
+    const apiUrl = speech.id ?
+      `/api/speech-html-content?date=${sittingDate}&speechId=${encodeURIComponent(speech.id)}` :
+      `/api/speech-html-content?date=${sittingDate}`;
     
     fetch(apiUrl)
       .then(res => res.ok ? res.json() : { content: '—' })
@@ -267,9 +273,10 @@ function renderMarkdown(md) {
         let content = data.content || '—';
         // Fallback: If no content, try to fetch the TOC page and extract something
         if (content === '—' || !content.trim()) {
-          const tocHtmlUrl = `https://www.europarl.europa.eu/doceo/document/CRE-10-${speech.date}-TOC_EN.html`;
+          const session = getSessionNumber(sittingDate);
+          const fallbackUrl = `https://www.europarl.europa.eu/doceo/document/CRE-${session}-${sittingDate}_EN.html`;
           try {
-            const resp = await fetch(tocHtmlUrl);
+            const resp = await fetch(fallbackUrl);
             if (resp.ok) {
               const html = await resp.text();
               // Extract all agenda items from the TOC HTML
@@ -390,27 +397,11 @@ function renderMarkdown(md) {
           }
         };
 
-        // Set the HTML link, with fallback if the main page is missing
-        const mainHtmlUrl = `https://www.europarl.europa.eu/doceo/document/CRE-10-${speech.date}_EN.html`;
-        const tocHtmlUrl = `https://www.europarl.europa.eu/doceo/document/CRE-10-${speech.date}-TOC_EN.html`;
-        try {
-          const resp = await fetch(mainHtmlUrl, { method: 'HEAD' });
-          if (resp.ok) {
-            htmlLinkEl.href = mainHtmlUrl;
-            htmlLinkEl.textContent = 'Open HTML';
-            htmlLinkEl.style.display = '';
-          } else {
-            // Fallback to TOC
-            htmlLinkEl.href = tocHtmlUrl;
-            htmlLinkEl.textContent = 'Open TOC HTML';
-            htmlLinkEl.style.display = '';
-          }
-        } catch (e) {
-          // Fallback to TOC
-          htmlLinkEl.href = tocHtmlUrl;
-          htmlLinkEl.textContent = 'Open TOC HTML';
-          htmlLinkEl.style.display = '';
-        }
+        const session = getSessionNumber(sittingDate);
+        const htmlUrl = `https://www.europarl.europa.eu/doceo/document/CRE-${session}-${sittingDate}_EN.html`;
+        htmlLinkEl.href = htmlUrl;
+        htmlLinkEl.textContent = 'Open HTML';
+        htmlLinkEl.style.display = '';
       });
   } else {
     contentMainEl.textContent = '—';
@@ -452,20 +443,6 @@ function renderMarkdown(md) {
   } else if (extContainer) {
     // Hide the external link container if no document identifier is available
     extContainer.style.display = 'none';
-  }
-
-  // Show raw JSON
-  const rawEl = document.getElementById('rawJson');
-  if (rawEl) {
-    // Display the raw JSON data of the speech record
-    rawEl.textContent = JSON.stringify(speech, null, 2);
-  }
-
-  // Show raw HTML content
-  const rawHtmlEl = document.getElementById('rawHtml');
-  if (rawHtmlEl && speech.content) {
-    // Display the raw HTML content of the speech
-    rawHtmlEl.textContent = speech.content;
   }
 
   // --- Quick Overview Bar ---
@@ -631,16 +608,14 @@ function displayIndividualSpeeches(speeches) {
     
     const languageDisplay = languageNames[language] || language;
     
-    // Determine display header: prefer macro topic + focus, fallback to legacy topic
-    const headerLabel = macroTopic ? (macroFocus ? `${macroTopic} — ${macroFocus}` : macroTopic) : topic;
-    // Show topic header if this speech has a different header than the previous one
-    if (headerLabel && headerLabel !== currentTopic) {
+    // Blue separator: show original agenda title when it changes
+    if (topic && topic !== currentTopic) {
       html += `
         <div style="background: linear-gradient(135deg, #003399, #0044cc); color: #ffffff !important; padding: 0.8rem 1rem; margin: 1rem 0 0.5rem 0; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,51,153,0.3);">
-          <h3 style="margin: 0; font-size: 1.1em; font-weight: 600; color: #ffffff !important;">📋 ${headerLabel}</h3>
+          <h3 style="margin: 0; font-size: 1.1em; font-weight: 600; color: #ffffff !important;">📋 ${topic}</h3>
         </div>
       `;
-      currentTopic = headerLabel;
+      currentTopic = topic;
     }
     
     html += `

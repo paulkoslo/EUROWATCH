@@ -501,10 +501,6 @@ select:focus {
   font-size: 1rem;
 }
 
-#rawJsonSection details {
-  margin-top: 1.5rem;
-}
-
 @media (max-width: 900px) {
   .speech-main-box {
     padding: 1rem 0.5rem;
@@ -540,16 +536,54 @@ select:focus {
   margin-bottom: 0.75rem;
 }
 
+#topMepTable .mep-profile-link {
+  color: var(--eu-blue);
+  text-decoration: none;
+  font-weight: 500;
+}
+#topMepTable .mep-profile-link:hover {
+  text-decoration: underline;
+}
+
+/* Top MEPs topic searchable dropdown */
+.top-mep-topic-list {
+  padding: 4px 0;
+}
+.top-mep-topic-option {
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--eu-gray-800);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.top-mep-topic-option:hover,
+.top-mep-topic-option:first-child:hover {
+  background: var(--eu-gray-100);
+}
+.top-mep-topic-option:first-child {
+  color: var(--eu-gray-600);
+  border-bottom: 1px solid var(--eu-gray-200);
+}
+
 #trendChart {
   height: 420px !important;
 }
 
-#groupHeat, #countryHeat {
-  height: 380px !important;
+/* Overview charts row (Macro × Groups, Macro × Languages) – bottom of analytics */
+#analytics .analytics-overview-charts {
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+#analytics .analytics-overview-charts .chart-container {
+  min-width: 280px;
+  flex: 1 1 280px;
 }
 
-#langChart {
-  height: 320px !important;
+#groupHeat, #languageHeat {
+  height: 380px !important;
+  max-height: 380px;
 }
 
 #macroTopicChart, #specificFocusChart {

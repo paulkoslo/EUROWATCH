@@ -4,7 +4,14 @@
   "description": "Dashboard for EU Parliament data using public API",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "pipeline": "node src/pipeline/index.js",
+    "step1": "node src/scripts/step-1-discover-date.js",
+    "step2": "node src/scripts/step-2-fetch-html.js",
+    "step3": "node src/scripts/step-3-parse-sitting.js",
+    "step4": "node src/scripts/step-4-classify-topics.js",
+    "step5": "node src/scripts/step-5-store-sitting.js",
+    "bulk": "node src/pipeline/index.js --full"
   },
   "dependencies": {
     "axios": "^0.27.2",
@@ -18,6 +25,7 @@
     "openai": "^4.0.0",
     "ora": "^9.0.0",
     "pm2": "^6.0.6",
+    "proper-lockfile": "^4.1.2",
     "sqlite3": "^5.0.11"
   }
 }

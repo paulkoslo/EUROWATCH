@@ -1,549 +1,206 @@
-# EUROWATCH - European Parliament Speech Analysis Platform
-
-A comprehensive web application and analysis platform for European Parliament speeches, featuring real-time data collection, AI-powered topic classification, and advanced analytics for political research.
-
-## 🎯 Project Overview
-
-EUROWATCH is a sophisticated platform that collects, processes, and analyzes European Parliament speeches from multiple sources. It combines web scraping, natural language processing, and machine learning to provide insights into parliamentary proceedings, political discourse, and policy trends.
-
-### Key Features
-
-- **🌐 Real-time Data Collection**: Automated scraping of EU Parliament speeches and metadata
-- **🤖 AI Topic Classification**: GPT-5-nano powered speech categorization with 50+ topic categories
-- **📊 Interactive Web Dashboard**: Multi-tab interface for MEPs, speeches, and analytics
-- **🔍 Advanced Search & Filtering**: Filter by date, speaker, political group, language, and topic
-- **📈 Comprehensive Analytics**: Statistical analysis, trend detection, and data export
-- **🌍 Multi-language Support**: Automatic language detection for 24 EU languages
-- **💾 SQLite Database**: Efficient local storage with full-text search capabilities
-
-## 🏗️ Architecture
-
-### Frontend (Web Interface)
-- **Main Dashboard** (`public/index.html`): MEP overview with charts and filtering
-- **Speech Browser** (`public/speech.html`): Individual speech analysis with AI features
-- **Newest Speeches** (`public/newest.html`): Latest parliamentary proceedings
-- **MEP Details** (`public/mep-details.html`): Individual MEP profiles and speech history
-
-### Backend (Node.js Server)
-- **Express Server** (`server.js`): RESTful API with 20+ endpoints
-- **Database Layer**: SQLite3 with optimized queries and full-text search
-- **Data Processing**: Automated scraping, parsing, and normalization
-
-### Analysis Scripts
-- **Data Collection**: Automated speech fetching and parsing
-- **AI Classification**: GPT-5-nano topic classification with rate limiting
-- **Analytics**: Comprehensive statistical analysis and reporting
-- **Export Tools**: CSV/JSON export for research purposes
-
-## 📦 Installation & Setup
-
-### Prerequisites
-- Node.js 16+ 
-- npm or yarn
-- OpenAI API key (for AI classification features)
-
-### Quick Setup
-```bash
-# Clone the repository
-git clone <repository-url>
-cd EUROWATCH
-
-# Install dependencies
-npm install
-
-# Set up environment variables
-echo "OPENAI_API_KEY=your-api-key-here" > .env
-
-# Start the web server
-npm start
-```
-
-The web application will be available at `http://localhost:3000`
-
-## 🔄 Complete Data Generation Workflow
-
-Since the database and analysis files are not included in the repository (due to size), you'll need to generate your own dataset. Here's the complete step-by-step workflow:
-
-### Phase 1: Initial Data Collection
-
-#### Step 1: Fetch Raw Parliamentary Data
-```bash
-# Option A: Fetch recent data (recommended for testing)
-node perfect-fetch-parse.js 2024-01-01
-
-# Option B: Fetch historical data by year range
-node perfect-fetch-parse-yearly.js 2019-01-01 2024-12-31
-
-# Option C: Quick update (incremental)
-node update.js
-```
-
-**What this does:**
-- Fetches speech metadata from EU Parliament API
-- Downloads HTML content from parliament websites
-- Creates `sittings` table with raw parliamentary session data
-- Parses HTML to extract individual speeches
-- Creates `individual_speeches` table with speaker, content, and metadata
-
-### Phase 2: Data Processing & Enhancement
-
-#### Step 2: Parse Individual Speeches (if needed)
-```bash
-# Enhanced parsing with better political group detection
-node reparse-with-parentheses.js
-
-# Or reparse all sittings with improved parsing
-node reparse-all-with-parentheses.js
-```
-
-**What this does:**
-- Improves speech parsing with better pattern recognition
-- Handles complex speaker formats: "Name (Party), Role. – Speech"
-- Extracts political groups from parentheses and role descriptions
-- Updates `individual_speeches` with better speaker/group detection
-
-#### Step 3: Language Detection
-```bash
-node detect-language.js
-```
-
-**What this does:**
-- Adds `language` column to `individual_speeches`
-- Uses CLD3 (neural) + franc (n-gram) for high-accuracy detection
-- Supports all 24 EU official languages
-- Handles multilingual content with majority voting
-
-#### Step 4: Political Group Normalization
-```bash
-# Dry run to see what will be normalized
-node group-normalizer.js
-
-# Apply normalization to database
-node group-normalizer.js --apply
-```
-
-**What this does:**
-- Adds columns: `political_group_raw`, `political_group_std`, `political_group_kind`, `political_group_reason`
-- Normalizes 400+ political group variations to 11 canonical groups
-- Detects institutional roles vs. political groups
-- Achieves 99.99% classification accuracy
-
-#### Step 5: Topic Mapping (Original Topics)
-```bash
-# Map topics for a specific date
-node map-topics-for-sitting.js --date 2024-01-15 --apply
-
-# Map topics for all dates in database
-node map-topics-for-sitting.js --all --apply
-```
-
-**What this does:**
-- Fetches HTML agenda headers from parliament websites
-- Extracts canonical topic titles from session agendas
-- Maps topics to individual speeches using content matching
-- Adds `topic` column with original parliamentary topics
-
-### Phase 3: AI Enhancement
-
-#### Step 6: AI Topic Classification
-```bash
-# Set up OpenAI API key first
-echo "OPENAI_API_KEY=your-api-key-here" > .env
-
-# Test classification on small sample
-node test-gpt-classification.js
-
-# Classify recent sessions (recommended)
-node classify-sessions.js 5
-
-# Or classify specific number of speeches
-node classify-speeches-production.js 1000
-```
-
-**What this does:**
-- Uses GPT-5-nano-2025-08-07 for advanced topic classification
-- Applies 50+ topic categories (procedural, institutional, policy domains)
-- Adds columns: `classified_topic`, `topic_classified_by`, `topic_classified_at`, `topic_classification_cost`
-- Implements rate limiting for OpenAI Tier 2 (5,000 RPM, 2M TPM)
-- Real-time progress tracking with cost estimation
-
-### Phase 4: Quality Control & Analysis
-
-#### Step 7: Data Quality Checks
-```bash
-# Check for and remove duplicates
-node check-duplicates.js
-
-# Or quick cleanup without prompts
-node check-duplicates.js --quick
-
-# Analyze topic distribution
-node analyze-topics.js
-
-# Comprehensive data analysis
-node comprehensive-analysis.js
-```
-
-**What this does:**
-- Identifies and removes duplicate sittings and speeches
-- Analyzes topic patterns and distribution
-- Provides comprehensive dataset statistics
-- Validates data quality and completeness
-
-#### Step 8: Research Data Export
-```bash
-# Export thesis-ready datasets
-node export-thesis-data.js
-
-# Deep dive analysis for academic research
-node thesis-analysis-deep-dive.js
-```
-
-**What this does:**
-- Exports 7 different CSV datasets optimized for research
-- Creates Brexit analysis dataset with timeline markers
-- Generates speaker statistics and political group summaries
-- Produces topic modeling ready datasets
-- Creates comprehensive codebook and metadata
-
-### Phase 5: Web Interface
-
-#### Step 9: Start Web Application
-```bash
-npm start
-```
-
-**What this provides:**
-- Interactive dashboard at `http://localhost:3000`
-- MEP overview with charts and filtering
-- Speech browser with AI-classified topics
-- Individual speech analysis with metadata
-- Real-time search and filtering capabilities
-
-## 📊 Expected Results
-
-After completing the full workflow, you'll have:
-
-- **Database**: SQLite database with 100,000+ speeches
-- **Tables**: `sittings`, `individual_speeches`, `meps`
-- **Languages**: 24 EU languages automatically detected
-- **Political Groups**: 11 standardized groups from 400+ variations
-- **Topics**: Both original parliamentary topics and AI-classified topics
-- **Time Range**: Configurable (typically 2015-2025)
-- **Export Data**: 7 research-ready CSV files with comprehensive metadata
-
-## ⚠️ Important Notes
-
-### Resource Requirements
-- **Time**: Initial setup takes 2-6 hours depending on date range
-- **Storage**: Database can grow to 500MB-2GB depending on scope
-- **API Costs**: GPT-5-nano classification costs ~$0.05-0.10 per 1000 speeches
-- **Rate Limits**: OpenAI Tier 2 limits automatically handled
-
-### Recommended Workflow Order
-1. **Start Small**: Use `perfect-fetch-parse.js 2024-01-01` for testing
-2. **Validate**: Check data quality with `comprehensive-analysis.js`
-3. **Enhance**: Run language detection and group normalization
-4. **Classify**: Use AI classification on subset first
-5. **Scale Up**: Expand to full historical data once workflow is validated
-
-## 🚀 Core Functionality
-
-### 1. Data Collection & Processing
-
-#### Main Data Collection Scripts
-- **`perfect-fetch-parse.js`**: Primary data collection script
-  - Fetches speeches from EU Parliament API
-  - Parses HTML content using Cheerio
-  - Handles multiple session formats and languages
-  - Implements robust error handling and retry logic
-
-- **`perfect-fetch-parse-yearly.js`**: Batch processing for historical data
-  - Processes multiple years of parliamentary data
-  - Optimized for large-scale data collection
-  - Progress tracking and resume capability
-
-- **`update.js`**: Incremental updates
-  - Fetches only new speeches since last update
-  - Lightweight script for regular maintenance
-
-#### Data Processing Features
-- **Language Detection** (`detect-language.js`): Automatic detection of 24 EU languages
-- **Political Group Normalization** (`group-normalizer.js`): Standardizes 400+ group variations
-- **Content Parsing**: Extracts speech text from HTML with multiple fallback methods
-- **Metadata Extraction**: Speaker info, dates, session details, and procedural context
-
-### 2. AI-Powered Topic Classification
-
-#### GPT-5-nano Integration
-- **Model**: `gpt-5-nano-2025-08-07` with 400k token context window
-- **Rate Limiting**: Tier 2 compliance (5,000 RPM, 2M TPM)
-- **Cost Optimization**: ~$0.05/1M input tokens, $0.40/1M output tokens
-
-#### Classification Scripts
-- **`classify-speeches-production.js`**: Production-ready classification
-  - Real-time progress bar with current topic display
-  - Automatic rate limiting and error handling
-  - Database integration with metadata tracking
-  - Cost tracking and estimation
-
-- **`classify-sessions.js`**: Session-based processing
-  - Processes multiple recent sessions
-  - Session-specific progress tracking
-  - Web interface integration
-
-- **`test-gpt-classification.js`**: Testing and validation
-  - Small-scale testing without database writes
-  - Cost estimation and model validation
-
-#### Topic Categories (50+ Categories)
-- **Procedural**: Opening/Closing Sessions, Order of Business, Voting Procedures
-- **Institutional**: Commission Work Programme, European Council, State of the Union
-- **Policy Domains**: Economic Affairs, Trade & Competition, Agriculture & Fisheries, Environment & Climate, Energy, Transport, Digital Affairs, Health & Consumer Protection, Employment & Social Affairs, Justice & Home Affairs, Education & Culture, Regional Development
-- **External Relations**: Foreign Affairs, Security & Defence, Development Cooperation, Enlargement
-- **Legislative**: Reports, Resolutions, Statements
-
-### 3. Web Interface
-
-#### Main Dashboard (`public/index.html`)
-- **MEPs Tab**: 
-  - Interactive charts (bar chart by country, pie chart by political group)
-  - Advanced filtering (status, country, political group)
-  - Paginated table with search functionality
-  - Real-time statistics
-
-- **Parliament Sittings Tab**:
-  - Session overview with speech counts
-  - Date-based filtering and sorting
-  - Speech preview functionality
-  - AI-classified topic display
-
-#### Speech Analysis (`public/speech.html`)
-- **Individual Speech View**: Full speech content with metadata
-- **AI Speaker Finder**: Identifies speakers in complex parliamentary exchanges
-- **AI Summary**: Generates summaries of long speeches
-- **Topic Classification Display**: Shows both original and AI-classified topics
-
-#### Additional Pages
-- **Newest Speeches** (`public/newest.html`): Latest parliamentary activity
-- **MEP Details** (`public/mep-details.html`): Individual MEP profiles and statistics
-
-### 4. Analytics & Research Tools
-
-#### Comprehensive Analysis (`comprehensive-analysis.js`)
-- **Dataset Overview**: Total speeches, date ranges, volume statistics
-- **Topic Analysis**: Topic distribution and trends over time
-- **Language Distribution**: Multi-language speech analysis
-- **Political Group Analysis**: Group participation and speech patterns
-- **Speaker Statistics**: Most active speakers and participation rates
-- **Temporal Trends**: Monthly/yearly speech patterns
-- **Data Quality Metrics**: Content length, completeness, and accuracy
-
-#### Thesis Research Tools (`thesis-analysis-deep-dive.js`)
-- **Longitudinal Analysis**: Multi-year trend analysis
-- **Political Group Evolution**: Changes in group participation over time
-- **Topic Evolution**: How topics change across parliamentary terms
-- **Cross-Group Analysis**: Comparative analysis between political groups
-- **Research Export**: Structured data for academic research
-
-#### Export Utilities (`export-thesis-data.js`)
-- **CSV Export**: Structured data for statistical analysis
-- **JSON Export**: Machine-readable format for further processing
-- **Filtered Exports**: Date range, topic, or group-specific exports
-- **Research-Ready Format**: Optimized for academic and policy research
-
-### 5. Data Management
-
-#### Database Schema
-- **`sittings`**: Parliamentary session metadata
-- **`individual_speeches`**: Speech content, metadata, and AI classifications
-- **`meps`**: Member of Parliament information
-- **Full-text search**: Optimized for content searching
-
-#### Data Quality Features
-- **Duplicate Detection** (`check-duplicates.js`): Identifies and handles duplicate speeches
-- **Content Validation**: Ensures speech content quality and completeness
-- **Metadata Verification**: Validates speaker, date, and session information
-- **Error Logging**: Comprehensive error tracking and reporting
-
-## 🔧 API Endpoints
-
-### Core Data Endpoints
-- `GET /api/meps` - Fetch all MEPs with optional filtering
-- `GET /api/speeches` - Fetch speeches with pagination and filtering
-- `GET /api/sittings` - Fetch parliamentary sessions
-- `GET /api/speech-preview` - Get speech preview by date
-
-### Analysis Endpoints
-- `GET /api/stats` - Overall statistics and metrics
-- `GET /api/topics` - Topic distribution and analysis
-- `GET /api/languages` - Language distribution
-- `GET /api/groups` - Political group statistics
-
-### Search Endpoints
-- `GET /api/search` - Full-text search across speeches
-- `GET /api/search/speakers` - Search by speaker name
-- `GET /api/search/topics` - Search by topic classification
-
-## 📊 Usage Examples
-
-### Data Collection
-```bash
-# Fetch speeches from a specific date
-node perfect-fetch-parse.js 2024-01-01
-
-# Update with latest speeches
-node update.js
-
-# Process multiple years
-node perfect-fetch-parse-yearly.js
-```
-
-### AI Classification
-```bash
-# Classify recent speeches (production)
-node classify-speeches-production.js
-
-# Classify specific sessions
-node classify-sessions.js 5
-
-# Test classification (no database writes)
-node test-gpt-classification.js
-```
-
-### Analysis
-```bash
-# Comprehensive analysis
-node comprehensive-analysis.js
-
-# Thesis research analysis
-node thesis-analysis-deep-dive.js
-
-# Export data for research
-node export-thesis-data.js
-```
-
-### Data Management
-```bash
-# Detect languages
-node detect-language.js
-
-# Check for duplicates
-node check-duplicates.js
-
-# Analyze topics
-node analyze-topics.js
-```
-
-## 🎨 Web Interface Features
-
-### Interactive Charts
-- **Country Distribution**: Bar chart showing MEPs by country
-- **Political Group Distribution**: Pie chart of political affiliations
-- **Speech Volume Trends**: Time-series charts of speech activity
-- **Topic Distribution**: Visual representation of AI-classified topics
-
-### Advanced Filtering
-- **Date Range**: Filter speeches by specific date ranges
-- **Political Groups**: Filter by political affiliation
-- **Languages**: Filter by speech language
-- **Topics**: Filter by AI-classified topics
-- **Speakers**: Filter by individual MEPs
-
-### Real-time Features
-- **Live Updates**: Automatic refresh of latest data
-- **Progress Tracking**: Real-time progress bars for long operations
-- **Error Handling**: User-friendly error messages and recovery
-- **Responsive Design**: Mobile-friendly interface
-
-## 🔬 Research Applications
-
-### Academic Research
-- **Political Science**: Analysis of parliamentary discourse and voting patterns
-- **Linguistics**: Multi-language speech analysis and language evolution
-- **Policy Studies**: Topic evolution and policy focus analysis
-- **Comparative Politics**: Cross-country and cross-group analysis
-
-### Policy Analysis
-- **Trend Detection**: Identify emerging policy topics and concerns
-- **Stakeholder Analysis**: Understand different political group positions
-- **Temporal Analysis**: Track policy evolution over time
-- **Impact Assessment**: Measure policy discussion intensity
-
-### Data Journalism
-- **Fact Checking**: Verify political statements and claims
-- **Trend Reporting**: Identify and report on parliamentary trends
-- **Comparative Analysis**: Compare positions across political groups
-- **Historical Context**: Provide historical perspective on current issues
-
-## 🛠️ Technical Specifications
-
-### Performance
-- **Database**: SQLite3 with optimized indexes and full-text search
-- **Rate Limiting**: OpenAI API compliance with automatic backoff
-- **Caching**: Intelligent caching for improved performance
-- **Batch Processing**: Efficient processing of large datasets
-
-### Scalability
-- **Modular Architecture**: Easy to extend and modify
-- **API-First Design**: RESTful endpoints for external integration
-- **Database Optimization**: Efficient queries and indexing
-- **Error Recovery**: Robust error handling and retry mechanisms
-
-### Security
-- **Environment Variables**: Secure API key management
-- **Input Validation**: Comprehensive input sanitization
-- **Rate Limiting**: Protection against abuse
-- **Error Handling**: Secure error messages without information leakage
-
-## 📈 Future Enhancements
-
-### Planned Features
-- **Real-time Notifications**: Alerts for new speeches and topics
-- **Advanced Analytics**: Machine learning for trend prediction
-- **API Integration**: External data source integration
-- **Mobile App**: Native mobile application
-- **Collaborative Features**: Multi-user research capabilities
-
-### Research Extensions
-- **Sentiment Analysis**: Emotional tone analysis of speeches
-- **Network Analysis**: Speaker interaction and influence mapping
-- **Predictive Modeling**: Topic and policy trend prediction
-- **Comparative Analysis**: Cross-parliamentary comparisons
-
-## 🤝 Contributing
-
-### Development Setup
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-### Code Style
-- Follow existing code patterns
-- Add comments for complex logic
-- Use meaningful variable names
-- Include error handling
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- **European Parliament**: For providing open data access
-- **OpenAI**: For GPT-5-nano model access
-- **Node.js Community**: For excellent libraries and tools
-- **Research Community**: For feedback and suggestions
-
-## 📞 Support
-
-For questions, issues, or contributions:
-- Create an issue in the repository
-- Contact the development team
-- Check the documentation and examples
+# EUROWATCH v1.1 — European Parliament Speech Analysis Platform
+
+A web application and analysis platform for European Parliament speeches: data collection, AI-powered topic classification, language detection, macro-topic normalization, and analytics for political research.
+
+## What's new in v1.1
+
+- **Clean, scalable codebase** — All application code under `src/`: `core/` (DB, fetch, parsing, analytics, language detection, topic agents, group normalizer), `server/` (Express glue, init-db, analytics cache, MEP sync), `pipeline/` (refresh & bulk), `scripts/` (steps and one-off tools). Root stays minimal: `server.js`, `package.json`, `public/`, `data/`, `docs/`.
+- **Data menu (floating button)** — All main data operations are available from the **Data** floating button: Check New Sittings, Build MEP Dataset, Refresh Languages, Normalize Macro Topics, Normalize Parties, Analyze (Generate Analytics DB). **Rebuild Database** is at the bottom (no step number), with a red background — use only when you need a full rebuild from scratch.
+- **Build MEP Dataset** — Clears MEP data and rebuilds from the EP API (term 5 to current), links speeches by name, creates historic MEPs for remaining speakers, runs the political group normalizer on speeches, then **syncs MEP affiliations** from speeches to `meps.politicalGroup` (so the MEP list and pie chart match speech-derived groups and roles). Small affiliations (&lt; 10 MEPs) are collapsed to **Other**.
+- **Normalize Parties** — Runs the political group normalizer on `individual_speeches` (sets `political_group_std`, kind, raw), then syncs affiliations to the MEP table (from standardized group, raw group, or **title** when no group is set). Titles like "Member of the Commission", "rapporteur", "Chair of the Delegation" are mapped to display labels; procedural titles (e.g. "in writing", "blue-card") are skipped. Again collapses small groups to **Other**. Use this to refresh affiliations without rebuilding MEPs.
+- **MEP Role/Affiliation** — The dashboard shows one affiliation per MEP (pie chart, table, export). It is derived from speeches: normalized group, or raw `political_group`, or **title** (role). That value is synced to `meps.politicalGroup` when you run Normalize Parties or Build MEP Dataset. Affiliations with fewer than 10 members are displayed and stored as **Other**.
+- **Normalize Macro Topics** — AI agent suggests rules to unify similar macro topics (e.g. "Foreign policy — Cuba" and "Foreign policy — Central America" → "Foreign policy — Americas"); optional test script for dry-run; apply from the Data menu.
+- **Refresh Languages** — Re-run language detection on all speeches from the Data menu (CLD3 + franc, EU-constrained).
+- **Analytics on demand** — Pre-computed analytics DB is generated via Data → **Analyze (Generate Analytics DB)** (step 6); Descriptive Analytics tab loads from it automatically when opened.
+- **Pipeline** — `npm run pipeline` (or `npm run bulk -- --full`) for CLI-based refresh and bulk ingestion; see `src/pipeline/` and `docs/PROJECT_STRUCTURE.md`.
 
 ---
 
-**EUROWATCH** - Empowering political research through data and AI
+## Project overview
+
+EUROWATCH collects, processes, and analyzes European Parliament speeches and combines scraping, NLP, and ML to support research on parliamentary proceedings and policy trends.
+
+### Key features
+
+- **Real-time data collection** — Pipeline to fetch and parse EU Parliament sittings and speeches
+- **AI topic classification** — GPT-based speech categorization with macro/specific topics
+- **Interactive dashboard** — MEPs, speeches, and Descriptive Analytics (topics, time series, by group/country, languages)
+- **Language detection** — Automatic detection for 24 EU languages (CLD3 + franc)
+- **Macro-topic normalization** — AI-suggested rules to unify duplicate or similar topic labels
+- **Pre-computed analytics** — SQLite analytics DB for fast charts and filters
+- **SQLite storage** — Main DB and analytics DB under `data/`
+
+---
+
+## Replication: running locally
+
+Because the database and analytics files are not in the repo (size), you generate your own dataset. The recommended way is to use the **Data** floating button in the web UI and follow the order below.
+
+### Prerequisites
+
+- **Node.js** 18+
+- **npm**
+- **OpenAI API key** (for AI topic classification and Normalize Macro Topics; add to `.env`)
+
+### Quick setup
+
+```bash
+git clone <repository-url>
+cd EUROWATCH
+
+npm install
+echo "OPENAI_API_KEY=your-api-key-here" > .env
+echo "LOCALRUN=1" >> .env   # required to show Data menu (local replication only)
+npm start
+```
+
+Open **http://localhost:3000**. The **Data** button (floating, bottom-right) opens the menu for all data operations.
+
+**LOCALRUN** — The floating Data menu and its actions (Check New Sittings, Build MEP Dataset, etc.) are only available when the `LOCALRUN` environment variable is set. Set it locally (e.g. `LOCALRUN=1` in `.env`) to use the menu. On the public website, do not set it so the menu is hidden and data actions are disabled.
+
+### Data menu (floating button)
+
+The main replication workflow uses the **Data** menu. Click the blue **Data** button to open it:
+
+![Data menu — use this for replication](public/img/Floating-menu.png)
+
+The menu lists **numbered steps (1–6)** and one unnumbered dangerous action at the bottom:
+
+| Step | Action | When to use |
+|------|--------|-------------|
+| **1** | **Check New Sittings** | Incremental update: fetch and store only new sittings since last run. Fast; no normalizer or MEP rebuild. Use regularly after initial setup. |
+| **2** | **Build MEP Dataset** | Clear all MEP data and rebuild: fetch MEPs from EP API (term 5+), link speeches by name, create historic MEPs for remaining speakers, run political group normalizer on speeches, sync affiliations to `meps.politicalGroup`, collapse small groups to **Other**. Use after you have sittings/speeches (e.g. after Rebuild Database or pipeline). |
+| **3** | **Refresh Languages** | Re-detect language for every speech (overwrites existing). Run so all speeches have a language. |
+| **4** | **Normalize Macro Topics** | AI agent suggests unification rules, then applies them so similar macro topics become one. Optional; requires `OPENAI_API_KEY`. |
+| **5** | **Normalize Parties** | Run the political group normalizer on speeches (set `political_group_std` etc.), then sync MEP affiliations from speeches (group + title); collapse affiliations with &lt; 10 MEPs to **Other**. Does not rebuild MEPs. Use to refresh Role/Affiliation without a full MEP rebuild. |
+| **6** | **Analyze (Generate Analytics DB)** | Build or rebuild the pre-computed analytics database (topics, time series, by group/country, languages). Required for the Descriptive Analytics tab. |
+| — | **Rebuild Database** | **Dangerous.** Full rebuild from scratch (from 1999): all sittings and speeches. Shown at the bottom with a red background. Use only when you have no data or need to start over. Can take many hours. |
+
+### Recommended order for a fresh install
+
+When you have **no data yet**, use the Data menu in this order:
+
+1. **Rebuild Database** (bottom of menu, red)  
+   Fetches and stores all sittings and speeches from the EU Parliament (from 1999). This can take several hours. Use only when starting from scratch.
+
+2. **Build MEP Dataset** (step 2)  
+   Builds the MEP table from the EP API, links speeches, creates historic MEPs, normalizes political groups on speeches, and syncs Role/Affiliation to the MEP table (including from speech titles). Small groups become **Other**.
+
+3. **Refresh Languages** (step 3)  
+   Runs language detection on all speeches so the `language` column is filled.
+
+4. **Normalize Macro Topics** (step 4)  
+   Optional. Asks the AI for topic unification rules, then applies them. Requires `OPENAI_API_KEY`.
+
+5. **Analyze (Generate Analytics DB)** (step 6)  
+   Builds the analytics database used by the Descriptive Analytics tab. Re-run after big data changes.
+
+For **regular updates** after that, use **Check New Sittings** (step 1). To refresh only MEP affiliations (and group normalization on speeches) without rebuilding MEPs, use **Normalize Parties** (step 5).
+
+### Optional: test normalization (no DB writes)
+
+To preview which macro topics would be merged without changing the database:
+
+```bash
+node src/scripts/test-normalize-macro-topics.js
+```
+
+Requires `OPENAI_API_KEY` and an existing DB with macro topics.
+
+### Optional: CLI pipeline
+
+For scripted or headless runs you can use the pipeline:
+
+```bash
+# Refresh: fetch and store new sittings from last fully processed date
+npm run pipeline
+
+# Full bulk: process a date range (see src/pipeline/index.js)
+npm run bulk
+```
+
+Language detection and analytics are still best run from the Data menu (or see `server.js` and `src/core/` for API/scripts).
+
+---
+
+## Architecture
+
+- **Frontend** — `public/`: main dashboard (`index.html`), speech view (`speech.html`), newest speeches (`newest.html`), shared `script.js` and styles.
+- **Backend** — `server.js` (Express): REST API, serves static files, wires in `src/server/` (init-db, analytics cache, speeches fetch, MEPs, config).
+- **Core** — `src/core/`: DB path, parliament fetch, parsing helpers, analytics DB, language detection, topic agent, normalize-topics agent and prompts.
+- **Pipeline** — `src/pipeline/`: refresh (new sittings) and bulk (date range); uses `src/scripts/` steps (discover, fetch HTML, parse sitting, classify, store).
+- **Data** — `data/`: main SQLite DB (`ep_data.db`), analytics DB (`analytics.db`), macro-topics list, macro-topic rules (from Normalize Macro Topics).
+
+See **`docs/PROJECT_STRUCTURE.md`** for the full layout and roles of `src/core`, `src/server`, `src/pipeline`, and `src/scripts`.
+
+---
+
+## Installation & setup (summary)
+
+- **Prerequisites:** Node.js 18+, npm, OpenAI API key (for AI features).
+- **Install:** `npm install` and `echo "OPENAI_API_KEY=..." > .env`.
+- **Run:** `npm start` → http://localhost:3000.
+- **Replicate data:** Use the Data menu in order: Rebuild Database → Build MEP Dataset → Refresh Languages → (optional) Normalize Macro Topics → Analyze (Generate Analytics DB). For updates: Check New Sittings; to refresh affiliations only: Normalize Parties.
+
+---
+
+## Expected results after replication
+
+- **Database** — `data/ep_data.db`: tables `sittings`, `individual_speeches`, `meps` (and related). Hundreds of thousands of speeches depending on date range. MEPs have `politicalGroup` synced from speeches (group or title); small groups stored as **Other**.
+- **Languages** — 24 EU languages detected and stored per speech.
+- **Topics** — Original agenda topics plus AI-classified macro/specific topics; optionally normalized via Normalize Macro Topics.
+- **Role/Affiliation** — One per MEP (PPE, S&D, Committee Rapporteur, European Commission, Other, etc.), from speeches; &lt; 10 members shown as **Other**.
+- **Analytics** — `data/analytics.db` and in-memory cache for the Descriptive Analytics tab (topics, time series, by group/country, languages).
+
+---
+
+## Important notes
+
+- **Time** — Rebuild Database can take many hours; Check New Sittings is fast (new sittings only). Build MEP Dataset and Normalize Parties run the group normalizer and sync (minutes). Refresh Languages and Normalize Macro Topics scale with speech count; Analyze (Generate Analytics DB) usually finishes in under a few minutes.
+- **Storage** — Main DB and analytics DB can grow to several GB for full history.
+- **API costs** — OpenAI is used for topic classification (pipeline) and for Normalize Macro Topics; cost depends on usage.
+- **WAL mode** — SQLite is run with WAL and optimized indexes for better read/write performance.
+
+---
+
+## API endpoints (overview)
+
+- **Data:** `GET /api/meps`, `GET /api/speeches`, `GET /api/sittings`, `GET /api/cache-status`, `GET /api/analytics/cache-status`
+- **Analytics:** `GET /api/analytics/overview`, `GET /api/analytics/time-series`, `GET /api/analytics/by-group`, `GET /api/analytics/by-language`, `GET /api/analytics/languages`
+- **Actions (POST):** `POST /api/test-pipeline` (Check New Sittings), `POST /api/refresh-mep-dataset` (Build MEP Dataset), `POST /api/refresh-languages` (Refresh Languages), `POST /api/normalize-macro-topics` (Normalize Macro Topics), `POST /api/normalize-parties` (Normalize Parties), `POST /api/generate-analytics` (Analyze), `POST /api/rebuild-database` (Rebuild Database)
+- **Search / speech:** `GET /api/search`, speech-by-id and related endpoints; see `server.js` for the full list.
+
+---
+
+## Technical notes
+
+- **Modular layout** — `src/core` (shared logic), `src/server` (HTTP/init), `src/pipeline` (ingestion), `src/scripts` (steps and tools).
+- **Analytics** — Pre-computed in a separate SQLite DB; loaded into memory on first use or via Data → Analyze; Descriptive Analytics tab warms the cache when opened.
+- **Language detection** — `src/core/detect-language.js` (CLD3 + franc); optional script `src/scripts/detect-language.js`.
+- **Normalize Macro Topics** — Prompt in `src/core/prompts/normalize-macro-topics.js`; agent in `src/core/normalize-topics-agent.js`; apply logic in `src/core/normalize-topics-apply.js`; rules saved under `data/macro-topic-rules.json`.
+- **Political groups & MEP affiliation** — Group normalizer in `src/core/group-normalizer.js` (writes `political_group_std`, kind, raw on `individual_speeches`). Sync in `src/server/sync-mep-affiliations.js`: derives affiliation from `political_group_std`, raw `political_group`, or speech `title` (roles like rapporteur, Commission); skips procedural titles (e.g. "in writing", "blue-card"); maps to display labels; collapses affiliations with &lt; 10 MEPs to **Other** in the DB. Used after Normalize Parties and Build MEP Dataset. Display logic for API in `server.js` (GET /api/meps) and `src/server/affiliation-display.js`.
+
+---
+
+## Contributing
+
+1. Fork the repo, create a feature branch, make changes, add tests if applicable, open a pull request.
+2. Follow existing patterns; keep application code under `src/` as in `docs/PROJECT_STRUCTURE.md`.
+
+---
+
+## License
+
+This project is licensed under the MIT License — see the LICENSE file for details.
+
+---
+
+## Acknowledgments
+
+- European Parliament for open data access
+- OpenAI for API and models
+- Node.js and the npm ecosystem
+
+---
+
+**EUROWATCH** — Political research through data and AI

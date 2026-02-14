@@ -1,0 +1,298 @@
+"Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (234 uses) - institutional_markers
+"Vice-President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (177 uses) - institutional_markers
+"deputising for the rapporteur" (91 uses) - parliamentary_markers
+"Member of the Commission, on behalf of the Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (90 uses) - institutional_markers
+"deputising for the author" (88 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Industry, Research and Energy" (66 uses) - parliamentary_markers
+"Member of the Commission, on behalf of the Vice-President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (62 uses) - institutional_markers
+"rapporteur for the opinion of the Committee on the Internal Market and Consumer Protection" (60 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Employment and Social Affairs" (59 uses) - parliamentary_markers
+"on behalf of the Vice-President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (50 uses) - institutional_markers
+"rapporteur for the opinion of the Committee on Development" (49 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Foreign Affairs" (47 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on the Environment, Public Health and Food Safety" (44 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Civil Liberties, Justice and Home Affairs" (44 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Transport and Tourism" (43 uses) - parliamentary_markers
+"President of the Eurogroup" (43 uses) - institutional_markers
+"rapporteur for the opinion of the Committee on Budgets" (38 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Regional Development" (36 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on International Trade" (36 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Women’s Rights and Gender Equality" (33 uses) - parliamentary_markers
+"President-in-Office of the Council, on behalf of the Vice-President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (32 uses) - institutional_markers
+"Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (31 uses) - institutional_markers
+"rapporteur for the opinion of the Committee on Legal Affairs" (30 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Economic and Monetary Affairs" (27 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Culture and Education" (27 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Agriculture and Rural Development" (27 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Constitutional Affairs" (23 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Budgetary Control" (23 uses) - parliamentary_markers
+"on behalf of the Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (23 uses) - institutional_markers
+"Member of the Commission, on behalf of the Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (17 uses) - institutional_markers
+"rapporteur for the opinion of the Committee on Petitions" (14 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Fisheries" (12 uses) - parliamentary_markers
+"Member of the Commission, on behalf of the Vice—President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (12 uses) - institutional_markers
+"Member of the Commission, on behalf of the Vice—President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (11 uses) - institutional_markers
+"High Representative of the Union for Foreign Affairs and Security Policy/Vice-President of the Commission" (11 uses) - institutional_markers
+"rapporteur for the opinion of the Committee on Women's Rights and Gender Equality" (10 uses) - parliamentary_markers
+"President-in-Office of the Council, on behalf of the Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (10 uses) - institutional_markers
+"High Representative for the Common Foreign and Security Policy" (10 uses) - institutional_markers
+"Vice-President of the Commission/High Representative of the Union for Foreign Affairs" (9 uses) - institutional_markers
+"President-in-Office of the Council, on behalf of the Vice—President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (9 uses) - institutional_markers
+"Vice-President of the Commission and High Representative of the Union for Foreign Affairs and Security Policy" (8 uses) - institutional_markers
+"vicepresidente de la Comisión / alto representante de la Unión para Asuntos Exteriores y Política de Seguridad, en nombre del Consejo" (6 uses) - institutional_markers
+"on behalf of the Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (6 uses) - institutional_markers
+"rapporteur for the opinion of the JURI Committee" (5 uses) - parliamentary_markers
+"föredragande av yttrande från utskottet för miljö, folkhälsa och livsmedelssäkerhet" (5 uses) - parliamentary_markers
+"Member of the Commission, on behalf of the Vice—President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (5 uses) - institutional_markers
+"High Representative for the CFSP" (5 uses) - institutional_markers
+"rapporteur for the opinion of the ITRE Committee" (4 uses) - parliamentary_markers
+"rapporteur for the opinion of the FEMM Committee" (4 uses) - parliamentary_markers
+"ordfører for udtalelse fra Kultur- og Uddannelsesudvalget" (4 uses) - parliamentary_markers
+"on behalf of the Committee on the Environment, Public Health and Food Safety" (4 uses) - parliamentary_markers
+"on behalf of Catherine Ashton (Vice-President of the Commission and High Representative of the Union for Foreign Affairs and Security Policy)" (4 uses) - institutional_markers
+"föredragande av yttrande från utskottet för medborgerliga fri- och rättigheter samt rättsliga och inrikes frågor" (4 uses) - parliamentary_markers
+"Vice—President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (4 uses) - institutional_markers
+"Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (4 uses) - institutional_markers
+"Jillian (Verts/ALE),   rapporteur" (4 uses) - parliamentary_markers
+"rapporteur for the opinion of the SEDE Committee" (3 uses) - parliamentary_markers
+"rapporteur for the opinion of the LIBE Committee" (3 uses) - parliamentary_markers
+"rapporteur for the opinion of the IMCO Committee" (3 uses) - parliamentary_markers
+"rapporteur for the opinion of the ECON Committee" (3 uses) - parliamentary_markers
+"ordfører for udtalelse fra Udvalget om International Handel" (3 uses) - parliamentary_markers
+"ordfører for udtalelse fra Udvalget for Andragender" (3 uses) - parliamentary_markers
+"ordfører for udtalelse fra Landbrugsudvalget" (3 uses) - parliamentary_markers
+"föredragande av yttrande från utskottet för utveckling" (3 uses) - parliamentary_markers
+"föredragande av yttrande från utskottet för transport och turism" (3 uses) - parliamentary_markers
+"föredragande av yttrande från utskottet för kvinnors rättigheter och jämställdhet mellan kvinnor och män" (3 uses) - parliamentary_markers
+"föredragande av yttrande från utskottet för ekonomi och valutafrågor" (3 uses) - parliamentary_markers
+"deputising for the questioner" (3 uses) - parliamentary_markers
+"candidate for President of the Commission" (3 uses) - parliamentary_markers
+"Vice-President of the Council/High Representative of the Union for Foreign Affairs and Security Policy" (3 uses) - institutional_markers
+"Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy, on behalf of the Council" (3 uses) - institutional_markers
+"Deputising for the author" (3 uses) - parliamentary_markers
+"rapporteur suppléant, au nom de Gérard Deprez" (2 uses) - parliamentary_markers
+"rapporteur for the opinion of the CULT Committee" (2 uses) - parliamentary_markers
+"rapporteur for the opinion of the AFET Committee" (2 uses) - parliamentary_markers
+"on behalf of the VPT/HR" (2 uses) - institutional_markers
+"on behalf of the VPC/HR" (2 uses) - institutional_markers
+"on behalf of the Committee on Petitions" (2 uses) - parliamentary_markers
+"on behalf of the Committee on Budgets" (2 uses) - parliamentary_markers
+"föredragande av yttrande från utskottet för utrikesfrågor" (2 uses) - parliamentary_markers
+"föredragande av yttrande från utskottet för sysselsättning och sociala frågor" (2 uses) - parliamentary_markers
+"föredragande av yttrande från utskottet för internationell handel" (2 uses) - parliamentary_markers
+"föredragande av yttrande från utskottet för industrifrågor, forskning och energi" (2 uses) - parliamentary_markers
+"draftsman for the Committee on the Environment, Public Health and Food Safety" (2 uses) - parliamentary_markers
+"deputising for the draftsman of the opinion of the Committee on Legal Affairs and the Internal Market" (2 uses) - parliamentary_markers
+"deputising for the draftsman of the opinion of the Committee on Industry, External Trade, Research and Energy" (2 uses) - parliamentary_markers
+"deputising for the draftsman of the opinion of the Committee on Employment and Social Affairs" (2 uses) - parliamentary_markers
+"Vice—President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (2 uses) - institutional_markers
+"Vice-President of the Commission/ High Representative of the Union for Foreign Affairs and Security Policy" (2 uses) - institutional_markers
+"Vice-President of the Commission, on behalf of the Vice-President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (2 uses) - institutional_markers
+"Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy, for the Council" (2 uses) - institutional_markers
+"Vice President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (2 uses) - institutional_markers
+"Member of the Commission, on behalf of the Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (2 uses) - institutional_markers
+"Member of the Commission, on behalf of the Vice-President of the Commission and High Representative of the Union for Foreign Affairs and Security Policy" (2 uses) - institutional_markers
+"Member of the Commission, on behalf of the Vice-President of the Commission and EU High Representative for Foreign Affairs and Security Policy" (2 uses) - institutional_markers
+"Jillian (Verts/ALE),   draftsman of the opinion of the Committee on Women's Rights and Equal Opportunities" (2 uses) - parliamentary_markers
+"High Representative of the Union for Foreign Affairs and Security Policy and Vice-President of the Commission" (2 uses) - institutional_markers
+"High Representative for CFSP" (2 uses) - institutional_markers
+"European Union High Representative for the Common Foreign and Security Policy" (2 uses) - institutional_markers
+"în numele autorului" (1 uses) - parliamentary_markers
+"yesterday we decided – and this is also recorded in the Minutes – to hold a debate on Thursday on developments in the Middle East. However, we did not set a deadline for tabling motions for resolutions. I would request that we set such a deadline, both for the actual motions – this could be today at 6 p.m" (1 uses) - looks_like_sentence
+"wystąpienie zasygnalizowane przez podniesienie niebieskiej kartki skierowanie do Marie Toussaint (Verts/ALE)" (1 uses) - looks_like_sentence
+"will the Commission act on the wish expressed by the Commissioner responsible and develop a standardised information system which might be used by those responsible on the spot – peace-keeping troops, staff working for humanitarian organisations, etc" (1 uses) - parliamentary_markers
+"we very frequently complain about the Council's attitude towards Parliament. I would like to highlight an incident of a completely opposite nature which took place yesterday during the debate on EU external action priorities. We had the reports from the President of the Council and the Commissioner followed by a debate took place. At the end of the debate, due to the presidency's total lack of flexibility, the President of the Council and Commissioner Patten were not able to respond to the numerous questions which had arisen from quite an intense debate. Now then, I cannot understand this Parliament for complaining about the Council's behaviour. Yesterday, the President of the Council was in the Chamber from 9 a.m. to 7 p.m" (1 uses) - parliamentary_markers
+"we are at a time where many stand against what the EU stands for – openness, international cooperation, freedom to trade, etc" (1 uses) - looks_like_sentence
+"w imieniu Komisji Rozwoju Regionalnego" (1 uses) - parliamentary_markers
+"vice ordförande för kommissionen" (1 uses) - institutional_markers
+"u ime Odbora za ribarstvo" (1 uses) - parliamentary_markers
+"those with disabilities, those from minority ethnic groups etc" (1 uses) - looks_like_sentence
+"there are some lessons that are very obvious already, for example, that people who do work that is of absolute importance to all of us – like health workers, cleaners, supermarket workers, etc" (1 uses) - looks_like_sentence
+"there are some areas – for example the attendance of veterinarians, fallen stock, etc" (1 uses) - looks_like_sentence
+"there are 40 new laws that will now apply to Kashmiris: a ban on the triple talaq divorce that is terrible for women, prohibition of child marriage, protection of women from domestic violence, etc" (1 uses) - looks_like_sentence
+"the development of relations must ensure full respect for European values and principles, and it is important to request firmly that the Council and the Commission take necessary steps – such as strongly recommending that Libya ratify and implement the Geneva Convention on Refugees of 1951 and its 1967 protocol; requesting that the Libyan authorities sign a memorandum of understanding granting UNHCR a legal presence in the country; encouraging Libya to commit to a moratorium on the death penalty, etc" (1 uses) - parliamentary_markers
+"the Netherlands and a number of small Member States have obtained good results in terms of growth, employment and international trade. There is a first lesson to be learnt from this, one that has perhaps come to my mind as a result of my country’s situation. It is that, in a country in which for five years, there has been one, let us say, liberal, structural reform after another, in which it was explained to us that that which was going to enable us to resolve the crisis, and the employment crisis in particular, was to reduce taxes – corporation tax, income tax – to jeopardise some forms of employment protection – we had a 'new employment' contract, which undermined protection against redundancies, etc" (1 uses) - looks_like_sentence
+"temperature, etc. This is not justified either, which is what the report attempts to do in technical terms. We call for support for the amendments we have presented so that specific treatment is given to peripheral areas – Sweden, Finland, Portugal, Italy, Spain, etc" (1 uses) - looks_like_sentence
+"spokesman for the opinion of the Committee on Foreign Affairs" (1 uses) - parliamentary_markers
+"requests, calls on the Member States to consider how to apply specific VAT arrangements to publications which are downloaded. The problem already exists and this would simply serve to completely confuse current policies. Paragraph 12 does not in fact contradict paragraph 13, because paragraph 13 merely calls on the Member States, if necessary, to reduce or abolish any VAT rates which apply to books – especially for institutions such as libraries etc" (1 uses) - looks_like_sentence
+"rapporteur on behalf of the opinion of the Committee on Women’s Rights and Gender Equality" (1 uses) - parliamentary_markers
+"rapporteur of the Committee on Regional Development, asked for an opinion" (1 uses) - parliamentary_markers
+"rapporteur of the Committee for Women’s Rights and Gender Equality, asked to provide an opinion" (1 uses) - parliamentary_markers
+"rapporteur for the opinions of the Committee on Foreign Affairs, the Subcommittee on Human Rights, and the Subcommittee on Security and Defence" (1 uses) - parliamentary_markers
+"rapporteur for the opinion of the PETI Committee" (1 uses) - parliamentary_markers
+"rapporteur for the opinion of the ENVI Committee" (1 uses) - parliamentary_markers
+"rapporteur for the opinion of the EMPL Committee" (1 uses) - parliamentary_markers
+"rapporteur for the opinion of the DEVE Committee" (1 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Rural Development" (1 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on International Trade. blue-card question" (1 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Internal Market and Consumer Protection" (1 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Economic and Monetary Affairs (ECON)" (1 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Development Cooperation" (1 uses) - parliamentary_markers
+"rapporteur for the opinion of the Committee on Civil Liberties, Justice and Home Affairs, deputising for the rapporteur" (1 uses) - parliamentary_markers
+"rapporteur for the opinion of the CONT Committee" (1 uses) - parliamentary_markers
+"rapporteur for the opinion of the BUDG Committee" (1 uses) - parliamentary_markers
+"rapporteur for the Committee on Women’s Rights and Gender Equality" (1 uses) - parliamentary_markers
+"rapporteur for the Committee on Budgets" (1 uses) - parliamentary_markers
+"rapporteur for the Committee on Budgetary Control" (1 uses) - parliamentary_markers
+"président en exercice du Conseil, au nom de la Vice-présidente de la Commission/Haute représentante de l'Union pour les affaires étrangères et la politique de sécur" (1 uses) - institutional_markers
+"président de la commission des budgets (ALDE)" (1 uses) - parliamentary_markers
+"president-inOffice of the Council, on behalf of the Vice-President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"people in Iraq are dying in the war for oil. The European economy is slowing down as a result of high and volatile oil prices. Third World countries are crumbling under debts created by oil imports. Is everyone a loser? No, there are some winners: six of the ‘Seven Sisters’ – including Exxon, Total, Shell, BP, et al" (1 uses) - looks_like_sentence
+"ordfører for udtalelsen fra ITRE-udvalget" (1 uses) - parliamentary_markers
+"ordfører for udtalelse, ENVI" (1 uses) - parliamentary_markers
+"ordfører for udtalelse fra Udvalget om det Indre Marked og Forbrugerbeskyttelse" (1 uses) - parliamentary_markers
+"ordfører for udtalelse fra Udvalget om Miljø, Folkesundhed og Fødevaresikkerhed" (1 uses) - parliamentary_markers
+"ordfører for udtalelse fra Udvalget om Kvinders Rettigheder og Ligestilling" (1 uses) - parliamentary_markers
+"ordfører for udtalelse fra Udvalget om Borgernes Rettigheder og Retlige og Indre Anliggender" (1 uses) - parliamentary_markers
+"ordfører for udtalelse fra Udvalget om Beskæftigelse og Sociale Anliggender" (1 uses) - parliamentary_markers
+"ordfører for udtalelse fra Transport- og Turismeudvalget" (1 uses) - parliamentary_markers
+"ordfører for udtalelse fra IMCO" (1 uses) - parliamentary_markers
+"on behalf of the questioner" (1 uses) - parliamentary_markers
+"on behalf of the draftsman of the opinion of the Committee on Petitions" (1 uses) - parliamentary_markers
+"on behalf of the draftsman" (1 uses) - parliamentary_markers
+"on behalf of the Vice—President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"on behalf of the Vice—President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"on behalf of the Special Committee on the COVID-19 pandemic" (1 uses) - parliamentary_markers
+"on behalf of the PPE Group (deputising for Iliana Ivanova, rapporteur for the opinion of the Committee on Women’s Rights and Gender Equality)" (1 uses) - parliamentary_markers
+"on behalf of the MEPs of the New Democracy Party, in writing" (1 uses) - looks_like_sentence
+"on behalf of the ENVI Committee" (1 uses) - parliamentary_markers
+"on behalf of the Committee on Legal Affairs" (1 uses) - parliamentary_markers
+"on behalf of the Committee on International Trade" (1 uses) - parliamentary_markers
+"on behalf of the Committee on Economic and Monetary Affairs" (1 uses) - parliamentary_markers
+"on behalf of the Committee on Civil Liberties, Justice and Home Affairs" (1 uses) - parliamentary_markers
+"on behalf of the Committee on Agriculture and Rural Development, on the Commission's Sapard Annual Report – Year 2000 (COM(2001) 341 – C5-0009/2002" (1 uses) - parliamentary_markers
+"on behalf of Memorial, winner of the 2009 Sakharov Prize" (1 uses) - parliamentary_markers
+"on behalf of Aleksei Navalny, Winner of the 2021 Sakharov Prize" (1 uses) - parliamentary_markers
+"on SOLVIT, by Mrs Arlene McCarthy, on behalf of the Committee on the Internal Market and Consumer Protection (0-0087/2005/rev" (1 uses) - parliamentary_markers
+"nowadays, most of us get our news from social media – in Malta, around 80 % do so. And while healthy democracies rely on quality journalism for objective information, this is not how our platforms are working. Big tech made a business out of polarisation. Their algorithms give preference to interaction" (1 uses) - looks_like_sentence
+"namens Michael Theurer, voorzitter van de Commissie CONT" (1 uses) - parliamentary_markers
+"it is my great pleasure to welcome you here today, though this pleasure is clearly tinged with such great shared sadness at the news of the death of President Boris Trajkovski.Mr President, you come to the European Parliament at a crucial and defining time in the life of our European Union. This will be a year of renewal for our Parliament, our Commission and our strategic planning for the next five years. It is also a moment of renewal in the definition of the relations between the European Union and Croatia.As you are aware, Mr President, this parliament was the first in the Union to give its support by majority to the Stabilisation and Association Agreement with Croatia, which was the early and indispensable first step on your journey – our common journey – towards fulfilling a Croatian European vision.Our relationship is now at a moment not just of definition, but also of transformation, moving from ambitious declarations to action plans and fulfilling criteria. Our common goal is to see Croatia eventually as a Member State of the European Union. We should not underestimate the magnitude of that challenge: the prospect of membership of the European Union represents a powerful incentive for those with a reformist instinct in your parliament and in your public life at home.The perspective of membership is related not only to concrete progress and delivering results in many different areas of policy; it is also about exercising responsible and reliable partnership and solidarity with your regional neighbours and between the region and a wider Europe. It will demand – and I know you have this, Mr President – a deep respect for the rule of law and full, unconditional cooperation with the International Criminal Tribunal for the former Yugoslavia in The Hague. I know that you have shown your personal attachment to this rule of international law by bearing witness before that tribunal in The Hague and setting your example, as a national leader, of the necessity to engage. We in this House have on several occasions been encouraged by recent dialogue with Croatian leaders. I know that these responsibilities are well understood by those who are charged to lead.Mr President, echoing the private tribute I paid you on a visit to Croatia some months ago, I should like, on behalf of this House, to pay tribute once again to your courageous act of leadership and reconciliation, when, with President Marovic of Serbia and Montenegro some time ago, you respectively apologised for what had happened in the past decade. This was not immediately received by all the political forces and commentators in your homeland as an act designed to give you popularity, but it is a measure of the man you are in terms of the leadership you are willing to give, and yours is a region which badly needs the healing power of that kind of leadership.Mr President, it is my pleasure to invite you to address the European Parliament.(Applause)(Protests from Mr Borghezio.)President" (1 uses) - parliamentary_markers
+"it is essential for Parliament to speak out against the World Bank's decision. We call upon the governments to do everything in their power and use every avenue available to them – economic and otherwise, in view of the fact that China wants to join the WTO etc" (1 uses) - looks_like_sentence
+"it depends on the economic effect of the various auction formulae used. These are dependent on a variety of variables – length of licence, rules of payment for licence fees, conditions for network deployment, roaming obligations, etc" (1 uses) - looks_like_sentence
+"in writing. − (PT) The tragic events of 11 September 2001 in the United States alerted governments and airlines to the need to step up their security levels, so as to prevent acts of terrorism that could destroy thousands of human lives. Since 2007, the European Union has been seeking to negotiate with the EU an agreement on the use and transfer of passenger name records to the United States Department of Homeland Security. However, holding passenger details on file and the request for information of a personal nature – health, financial situation, etc" (1 uses) - looks_like_sentence
+"in writing.  I voted against the Rapkay report because I consider that the final text did not provide adequate support for services of general interest (public services). Directives on a sectoral basis alone will only result in ‘salami slicing’ of the overall public interest and carve out sectors for business benefit. There are aspects of social services which support the educational sector, forms of housing which serve a general public interest even if not expressly dealing with a deprived social sector etc" (1 uses) - looks_like_sentence
+"föredragande för ENVI-utskottets yttrande" (1 uses) - parliamentary_markers
+"föredragande av yttrande från utskottet för regional utveckling" (1 uses) - parliamentary_markers
+"föredragande av yttrande från utskottet för jordbruk och landsbygdens utveckling" (1 uses) - parliamentary_markers
+"föredragande av yttrande från utskottet för framställningar" (1 uses) - parliamentary_markers
+"furthermore, that an issue as important as this, which involves various committees of this Parliament and which is generating enormous concern in many areas – frozen embryos, the patentability of cells which may be multiplied for the purposes of transplants etc" (1 uses) - looks_like_sentence
+"formand for Rådet" (1 uses) - institutional_markers
+"for example, why they are allowing other people to go into and take control of the northern area of Iraq, which they do not allow Iraq to control, i.e" (1 uses) - looks_like_sentence
+"for example, that very few of the containers that enter Europe by land, sea or air are ever opened or examined – perhaps a maximum of 5 %. So in the containers, which are never even touched, come slaves, counterfeit goods, drugs, etc" (1 uses) - looks_like_sentence
+"for energy supplies, for schools, for roads, etc" (1 uses) - no_match
+"for VPC/HR" (1 uses) - institutional_markers
+"for Fiskeriudvalget" (1 uses) - parliamentary_markers
+"em nome da Comissão das Petições" (1 uses) - parliamentary_markers
+"draftsperson of the opinion for the Committee on Women’s Rights and Equal Opportunities" (1 uses) - parliamentary_markers
+"draftsperson for the opinion of the Committee on the Environment, Public Health and Consumer Policy" (1 uses) - parliamentary_markers
+"draftsperson for the opinion of the Committee on Women’s Rights and Equal Opportunities" (1 uses) - parliamentary_markers
+"draftsperson for the opinion of the Committee on Industry, External Trade, Research and Energy" (1 uses) - parliamentary_markers
+"draftsperson for the opinion of the Committee on Economic and Monetary Affairs" (1 uses) - parliamentary_markers
+"draftsman of the opinion of the Committee for Foreign Affairs" (1 uses) - parliamentary_markers
+"draftsman of the opinion of the Committee asked for an opinion, the Committee on Women’s Rights and Equal Opportunities" (1 uses) - parliamentary_markers
+"draftsman of the opinion of the Committee asked for an opinion, the Committee on Legal Affairs and the Internal Market" (1 uses) - parliamentary_markers
+"draftsman of the opinion of the Committee asked for an opinion, the Committee on Industry, External Trade, Research and Energy" (1 uses) - parliamentary_markers
+"draftsman of the opinion of the Committee asked for an opinion, the Committee on Fisheries" (1 uses) - parliamentary_markers
+"draftsman of the opinion of the Committee asked for an opinion, the Committee on Economic and Monetary Affairs" (1 uses) - parliamentary_markers
+"draftsman of the opinion of the Committee asked for an opinion, the Committee on Budgetary Control" (1 uses) - parliamentary_markers
+"draftsman of the opinion of the Committee asked for an opinion, the Committee on Agriculture and Rural Development" (1 uses) - parliamentary_markers
+"draftsman of the opinion for the Committee on the Environment, Public Health and Consumer Policy" (1 uses) - parliamentary_markers
+"draftsman of the opinion for the Committee on Internal Market and Consumer Protection" (1 uses) - parliamentary_markers
+"draftsman of the opinion for the Committee on External Affairs, Human Rights, the Common Security and Defence Policy" (1 uses) - parliamentary_markers
+"draftsman of the opinion for the Committee on Development and Cooperation" (1 uses) - parliamentary_markers
+"draftsman of the opinion for the Committee on Citizens’ Freedoms and Rights, Justice and Home Affairs" (1 uses) - parliamentary_markers
+"draftsman of the opinion for the Committee on Budgets" (1 uses) - parliamentary_markers
+"draftsman for the opinion of the Committee on Petitions" (1 uses) - parliamentary_markers
+"draftsman for the opinion of the Committee on Foreign Affairs, Human Rights, Common Security and Defence Policy" (1 uses) - parliamentary_markers
+"draftsman for the opinion of the Committee on Culture, Youth, Education, Media and Sport" (1 uses) - parliamentary_markers
+"draftsman for the opinion of the Committee on Budgets" (1 uses) - parliamentary_markers
+"draftsman for the opinion of the Committee on Agriculture and Rural Development" (1 uses) - parliamentary_markers
+"draftsman for the Committee on Regional Policy, Transport and Tourism" (1 uses) - parliamentary_markers
+"draftsman for the Committee on Industry, External Trade, Research and Energy" (1 uses) - parliamentary_markers
+"draftsman for the Committee on Foreign Affairs" (1 uses) - parliamentary_markers
+"draftsman for the Committee on Development and Cooperation" (1 uses) - parliamentary_markers
+"draftsman for the Committee on Culture, Youth, Education, the Media and Sport" (1 uses) - parliamentary_markers
+"draftsman for the Committee on Constitutional Affairs" (1 uses) - parliamentary_markers
+"deputizing for the draftsman of the opinion of the Committee on Citizens' Freedoms and Rights, Justice and Home Affairs" (1 uses) - parliamentary_markers
+"deputising for the rapporteur for the opinion of the DEVE Committee" (1 uses) - parliamentary_markers
+"deputising for the rapporteur for the opinion of the Committee on Constitutional Affairs" (1 uses) - parliamentary_markers
+"deputising for the rapporteur for the Committee on International Trade" (1 uses) - parliamentary_markers
+"deputising for the draftsperson of the Committee on the Environment, Public Health and Consumer Policy" (1 uses) - parliamentary_markers
+"deputising for the draftsman of the opinion of the Committee on Women's Rights and Equal Opportunities" (1 uses) - parliamentary_markers
+"deputising for the draftsman of the opinion of the Committee on Development and Cooperation" (1 uses) - parliamentary_markers
+"deputising for the chairman of the Committee on Budgets" (1 uses) - parliamentary_markers
+"deputising for the author, blue-card question" (1 uses) - parliamentary_markers
+"deputising for Markus Ferber, rapporteur for the opinion of the Committee on Transport and Tourism" (1 uses) - parliamentary_markers
+"chairman of the delegation for relations with South Africa" (1 uses) - parliamentary_markers
+"certain eco-quality standards have been fixed (we shall here call them ‘criteria’) for each of a number of specific product categories. There are at present 26 product categories, 622 licences and over 3 000 products and services – detergents, paper, clothing (including shoes and textiles), tourism, camping products, etc" (1 uses) - looks_like_sentence
+"author of the motion for a resolution" (1 uses) - parliamentary_markers
+"au nom de la commission de l'emploi et des affaires sociales" (1 uses) - parliamentary_markers
+"au nom de la commission ENVI" (1 uses) - parliamentary_markers
+"a blue-card question for Mr van der Stoep" (1 uses) - parliamentary_markers
+"Winner of the 2020 Sakharov Prize for Freedom of Thought" (1 uses) - parliamentary_markers
+"Vice—President of the Commission/High Representative for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"Vice-president of the Commission, on behalf of the Vice-President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"Vice-president of the Commission, on behalf of the Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"Vice-President of the Council/High Representative for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"Vice-President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy, on behalf of the Council" (1 uses) - institutional_markers
+"Vice-President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy VPC/HR" (1 uses) - institutional_markers
+"Vice-President of the Commission/High Representative of the Union for Affairs and Security Policy" (1 uses) - institutional_markers
+"Vice-President of the Commission/ High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"Vice-President of the Commission/ High Representative of the Union for Foreign Affairs" (1 uses) - institutional_markers
+"Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy, in writing" (1 uses) - institutional_markers
+"Vice-President of the Commission / High Madam Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"Vice-Chair of the Delegation to the EU-Kazakhstan, EU-Kyrgyzstan, EU-Uzbekistan and EU-Tajikistan Parliamentary Cooperation Committees and for relations with Turkmenistan and Mongolia" (1 uses) - parliamentary_markers
+"UN High Representative for the Alliance of Civilisations" (1 uses) - institutional_markers
+"Security and Justice which focus attention on the implementation of the principle of solidarity in the areas of asylum, border and migration management, the linkage between migration and the Union’s foreign policy – that is cooperation with third countries and the ‘more for more principle’, etc" (1 uses) - looks_like_sentence
+"Robert J.E. (PSE),   deputising for the draftsman of the opinion of the Committee on Citizens' Freedoms and Rights, Justice and Home Affairs" (1 uses) - parliamentary_markers
+"Robert (PSE),   deputizing for the rapporteur" (1 uses) - parliamentary_markers
+"Rapporteur for the opinion of the Committee on Fisheries" (1 uses) - parliamentary_markers
+"Rapporteur for the opinion of the Committee on Employment and Social Affairs" (1 uses) - parliamentary_markers
+"Rapporteur for the opinion of the Committee on Constitutional Affairs" (1 uses) - parliamentary_markers
+"Rapporteur for the Committee on Petitions" (1 uses) - parliamentary_markers
+"Rapporteur for endorsement Committee on Industry, Research and Energy" (1 uses) - parliamentary_markers
+"President-in-Office of the Council, on behalf of the Vice—President of the Commission/on behalf of the High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"President-in-Office of the Council, on behalf of the Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"President-in-Office of the Council, on behalf of the Vice-President of the Commission and High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"President-in-Office of the Council, on behalf of the Vice-President of the Commission and EU High Representative for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"President-in-Office of the Council, on behalf of the High Representative / Vice—President of the Commission" (1 uses) - institutional_markers
+"President-in-Office of the Council, on behalf of the High Representative / Vice-President of the Commission" (1 uses) - institutional_markers
+"President-in-Office of the Council, on behalf of Vice-President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"President-in-Office of the Council, on behalf of Catherine Ashton (Vice-President of the Commission and EU High Representative for Foreign Affairs and Security Policy)" (1 uses) - institutional_markers
+"President-in-Office of the Council, Vice—President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"President-in-Office of the Council on behalf of the Vice—President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"President-in-Office of the Council on behalf of the Vice-President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"Mitglied der Kommission, im Namen der Vizepräsidentin der Kommission / Hohen Vertreterin für Außen- und Sicherheitspolitik" (1 uses) - institutional_markers
+"Member of the Commission, on behalf of the Vice-President of the Commission/High Representative of the Union for Foreign Affairs and Security" (1 uses) - institutional_markers
+"Member of the Commission, on behalf of the Vice-President of the Commission / High Representative" (1 uses) - institutional_markers
+"Member of the Commission, on behalf of the Vice President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"Member of the Commission, on behalf of the Vice President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"Member of the Commission, on behalf of VP/HR" (1 uses) - institutional_markers
+"Member of the Commission on behalf of the Vice—President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"Madam President-in-Office of the Council, Commissioner, I think we are heading for some difficult debates given that Parliament is pretty much agreed – even my group – that we oppose the across-the-board 10% cuts in funding. We would like to thank Mr Bourlanges for his preliminary work, even though we certainly envisage the need to amend some points of the negotiations. It has already been mentioned by Mr Mulder that there must still be a critical review of expenditure on Kosovo, of the assessment of expenditure on Kosovo. As a group, we also consider that there must also be a critical review of the fisheries agreement. In these areas also we must ensure more efficiency, more ecological principles. There are some points where a critical review may be necessary, e.g. the export agreement with Japan. Nevertheless, we believe that additional tasks – and in this case many additional tasks would pass to the European budget – must also mean additional funds being allocated. We therefore need a critical review of the Financial Perspective. We would like to thank the Commissioner for intimating this. In any case, we are prepared to cooperate constructively in this matter. We think that Kosovo can certainly be financed with fresh funds, but we consider that the other points – Turkey, the fisheries agreement, etc" (1 uses) - institutional_markers
+"Jonathan (PPE-DE),   deputising for the rapporteur" (1 uses) - parliamentary_markers
+"Jillian, (Verts/ALE),   draftsman of the opinion of the Committee on Employment and Social Affairs" (1 uses) - parliamentary_markers
+"Jillian (Verts/ALE),   draftsman of the opinion of the Committee on Regional Development" (1 uses) - parliamentary_markers
+"Jillian (Verts/ALE)   draftsman of the opinion of the Committee on Women's Rights and Equal Opportunities" (1 uses) - parliamentary_markers
+"Ilka (Verts/ALE),   draftsperson of the opinion of the Committee on Industry, External Trade, Research and Energy" (1 uses) - parliamentary_markers
+"Ilka (Verts/ALE)  , draftsman of the opinion of the Committee on Industry, External Trade, Research and Energy" (1 uses) - parliamentary_markers
+"I would say that the aspect of human rights and the inclusion of clauses referring to human rights matters is a standard element. If you look at the whole new generation of country strategy papers that guides what we do and creates the basis for it, country by country for the whole world – this not only applies to the ACP countries but also to Asia and Latin America, etc" (1 uses) - looks_like_sentence
+"I would like to compliment our wonderful Commissioner, Mariya Gabriel, on her work for the European Year of Youth and for facilitating this discussion on its legacy and lessons learned. Indeed, I think it is something that every Commissioner should do once every five years. There is no doubt about it: young people have been greatly impacted by COVID and also are going to be affected most by the crisis in climate. And they deserve credit for helping through their protests and marches – Greta Thunberg, etc" (1 uses) - parliamentary_markers
+"I wish to put firmly on the record tonight that the farmers in Northern Ireland are exceedingly angry at the UK Government for not seeking European funding to help promote beef labelling. Other states have taken up this money to the tune of some £4m" (1 uses) - looks_like_sentence
+"I may add, is so careful to fish in accordance with specific legislation concerning the environment – closed seasons, fishing groups, bans on fishing with sweep nets and trawl nets etc" (1 uses) - looks_like_sentence
+"High Representative for the common foreign and security policy" (1 uses) - institutional_markers
+"High Representative for Common Foreign and Security Policy" (1 uses) - institutional_markers
+"Executive Vice—President of the Commission, on behalf of the Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"Executive Vice-president of the Commission, on behalf of the Vice-President of the Commission/High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"Executive Vice-president of the Commission, on behalf of the Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"Executive Vice-President of the Commission, on behalf of the Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers
+"Eurig (Verts/ALE),   draftsman of the opinion of the Committee on Culture, Youth, Education, the Media and Sport" (1 uses) - parliamentary_markers
+"Elisabeth (Verts/ALE),   rapporteur" (1 uses) - parliamentary_markers
+"Draftsman of the opinion of the Committee asked for an opinion, the Committee on Budgetary Control" (1 uses) - parliamentary_markers
+"Draftsman of the opinion for the Committee on Petitions" (1 uses) - parliamentary_markers
+"Commissioner, the problem of farmers’ incomes is getting more serious, particularly in the case of small and medium-sized farmers and family farms, of which there are significant numbers in many Member States. Consumer prices do not reflect the prices paid to farmers for their products. The unsustainable increase in the costs of factors of production – fuel, feed, fertilisers, plant-health products, etc" (1 uses) - parliamentary_markers
+"Chairman of the European Parliament’s delegation for observation of the elections in Palestine" (1 uses) - parliamentary_markers
+"Chairman of the Delegation for Relations with the Member States of ASEAN, South-East Asia and the Republic of Korea" (1 uses) - parliamentary_markers
+"Chair of the Delegation for Relations with the People’s Republic of China" (1 uses) - parliamentary_markers
+"(Verts/ALE)   draftsman of the opinion of the Committee on Development and Cooperation" (1 uses) - parliamentary_markers
+"(President-in-Office of the Council) on behalf of the Vice-President of the Commission / High Representative of the Union for Foreign Affairs and Security Policy" (1 uses) - institutional_markers

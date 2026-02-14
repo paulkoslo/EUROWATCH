@@ -82,14 +82,7 @@
       </div>
 
       <div class="meps-list-description" style="margin-bottom:1rem;">
-        <p>Browse all Members of the European Parliament (current and historic). Click "Show More" to load additional entries.</p>
-        <div class="admin-actions" style="margin-top:1rem;padding:1rem;background:var(--eu-gray-100);border-radius:6px;border-left:4px solid var(--eu-blue);">
-          <h4 style="margin:0 0 0.5rem 0;color:var(--eu-blue);">🔧 Admin Actions</h4>
-          <button id="linkHistoricMepsBtn" class="admin-btn" style="background:var(--eu-green);color:white;border:none;padding:0.5rem 1rem;border-radius:4px;cursor:pointer;margin-right:0.5rem;">
-            🔗 Create Historic MEPs & Link Speeches
-          </button>
-          <span id="linkingStatus" style="margin-left:0.5rem;font-weight:500;"></span>
-        </div>
+        <p>Browse all Members of the European Parliament (current and historic). Click "Show More" to load additional entries. To refresh or build the MEP dataset (API + historic + group normalization), use <strong>Data → Build MEP Dataset</strong>.</p>
       </div>
 
       <div class="table-container">
@@ -119,13 +112,13 @@
         <span id="speechesLoadingPercent" style="position:absolute;left:50%;top:0;transform:translateX(-50%);color:#222;font-size:0.95rem;line-height:18px;font-weight:bold;">0%</span>
       </div>
       <h2>Parliament Sittings</h2>
-      <button id="refreshSittingsBtn" style="margin-bottom:1rem;">Refresh Sittings</button>
       <form id="dateFilterForm" style="margin-bottom:2rem;">
         <label>Start date: <input type="date" id="startDate"></label>
         <label style="margin-left:1rem;">End date: <input type="date" id="endDate"></label>
         <button type="submit" style="margin-left:1rem;">Filter</button>
         <button type="button" id="clearFilter" style="margin-left:1rem;">Clear Filter</button>
       </form>
+      <p id="sittingsCountStatus" style="margin-bottom:1rem;">Loading…</p>
       <div class="table-container">
         <table id="newestSpeechesTable">
           <thead>
@@ -139,6 +132,7 @@
           <tbody></tbody>
         </table>
       </div>
+      <button id="loadMoreSittingsBtn" style="display:none;margin-top:1rem;">Load more</button>
     </div>
 
     <!-- Analytics tab content -->
@@ -146,7 +140,7 @@
       <h2>Descriptive Analytics</h2>
       <div style="margin-bottom:1rem;color:#555">Overview of macro topics, specific focuses, and recent trends.</div>
       
-      <!-- Cache Loading Progress -->
+      <!-- Cache Loading Progress (shown while analytics load on first open) -->
       <div id="cacheLoadingProgress" style="display:none; background:#f0f9ff; border:1px solid #0ea5e9; border-radius:8px; padding:1.5rem; margin-bottom:1.5rem;">
         <h3 style="margin:0 0 1rem 0; color:#0369a1; font-size:1.1rem;">⏳ Loading Analytics Data...</h3>
         <div style="background:#e0f2fe; border-radius:8px; height:32px; position:relative; overflow:hidden; margin-bottom:0.75rem;">
@@ -186,6 +180,22 @@
             <input type="radio" name="granularity" id="granQuarter" value="quarter">
             Quarterly
           </label>
+          <label style="display:flex; align-items:center; gap:6px;">
+            <input type="radio" name="granularity" id="granYear" value="year">
+            Yearly
+          </label>
+        </div>
+        <div style="border-left:2px solid #cbd5e1; padding-left:1rem; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-weight:600;color:#374151">Range:</span>
+          <label style="display:flex; align-items:center; gap:4px; font-size:13px;">
+            <span style="color:#6b7280">From</span>
+            <input type="text" id="timeFilterFrom" placeholder="e.g. 2015" style="width:72px; padding:4px 8px; border:1px solid #cbd5e1; border-radius:4px; font-size:13px;">
+          </label>
+          <label style="display:flex; align-items:center; gap:4px; font-size:13px;">
+            <span style="color:#6b7280">To</span>
+            <input type="text" id="timeFilterTo" placeholder="e.g. 2025" style="width:72px; padding:4px 8px; border:1px solid #cbd5e1; border-radius:4px; font-size:13px;">
+          </label>
+          <button type="button" id="applyTimeFilter" style="padding:6px 12px; font-size:12px; background:#e2e8f0; color:#374151; border:1px solid #cbd5e1; border-radius:4px; cursor:pointer;">Apply</button>
         </div>
         <div style="border-left:2px solid #cbd5e1; padding-left:1rem; display:flex; align-items:center; gap:8px;">
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
@@ -198,8 +208,48 @@
             <option value="12">12-period</option>
           </select>
         </div>
-        <span style="color:#6b7280">(Always showing full 10-year range)</span>
       </div>
+      <div class="chart-container" style="position:relative;">
+        <h3 id="trendChartTitle">Monthly Trends (Top Topics)</h3>
+        <div class="loading-overlay" id="trendLoading"><div class="spinner"></div></div>
+        <canvas id="trendChart"></canvas>
+      </div>
+
+      <div class="chart-container" style="position:relative;">
+        <h3>Top MEPs (by selected topic)</h3>
+        <p style="margin:0 0 0.5rem 0;font-size:0.9rem;color:#64748b;">Select or search a macro topic and click Load to show the top 10 speakers (MEP, Country, Group, Speeches).</p>
+        <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:0.5rem;">
+            Topic:
+            <div class="top-mep-topic-dropdown" style="position:relative;display:inline-block;">
+              <input id="topMepTopic" type="text" autocomplete="off" placeholder="Search or select (empty = all)" style="width:320px;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px;box-sizing:border-box;">
+              <div id="topMepTopicList" class="top-mep-topic-list" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:100;max-height:240px;overflow:auto;background:#fff;border:1px solid #cbd5e1;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);margin-top:2px;"></div>
+            </div>
+          </label>
+          <button id="loadTopMep">Load</button>
+        </div>
+        <div class="loading-overlay" id="mepLoading"><div class="spinner"></div></div>
+        <table id="topMepTable" class="data-table">
+          <thead><tr><th>MEP</th><th>Country</th><th>Group</th><th>Speeches</th></tr></thead>
+          <tbody><tr><td colspan="4" style="color:#64748b;padding:1rem;">Click Load to show the top 10 speakers for the topic (or for all topics if left empty).</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- Overview charts (not filtered by topic selection) -->
+      <div class="charts-container analytics-overview-charts">
+        <div class="chart-container chart-fixed-aspect" style="position:relative;">
+          <h3>Macro Topics × Political Groups</h3>
+          <div class="loading-overlay" id="groupLoading"><div class="spinner"></div></div>
+          <canvas id="groupHeat"></canvas>
+        </div>
+        <div class="chart-container chart-fixed-aspect" style="position:relative;">
+          <h3>Macro Topics × Languages</h3>
+          <div class="loading-overlay" id="languageLoading"><div class="spinner"></div></div>
+          <canvas id="languageHeat"></canvas>
+        </div>
+      </div>
+
+      <!-- Coverage and topic charts (at bottom) -->
       <div class="charts-container">
         <div class="chart-container">
           <h3>Coverage</h3>
@@ -213,42 +263,6 @@
           <h3>Top Specific Focus</h3>
           <canvas id="specificFocusChart"></canvas>
         </div>
-      </div>
-      <div class="chart-container" style="position:relative;">
-        <h3 id="trendChartTitle">Monthly Trends (Top Topics)</h3>
-        <div class="loading-overlay" id="trendLoading"><div class="spinner"></div></div>
-        <canvas id="trendChart"></canvas>
-      </div>
-
-      <div class="charts-container">
-        <div class="chart-container" style="position:relative;">
-          <h3>Macro Topics × Political Groups</h3>
-          <div class="loading-overlay" id="groupLoading"><div class="spinner"></div></div>
-          <canvas id="groupHeat"></canvas>
-        </div>
-        <div class="chart-container" style="position:relative;">
-          <h3>Macro Topics × Countries</h3>
-          <div class="loading-overlay" id="countryLoading"><div class="spinner"></div></div>
-          <canvas id="countryHeat"></canvas>
-        </div>
-        <div class="chart-container" style="position:relative;">
-          <h3>Languages</h3>
-          <div class="loading-overlay" id="langLoading"><div class="spinner"></div></div>
-          <canvas id="langChart"></canvas>
-        </div>
-      </div>
-
-      <div class="chart-container" style="position:relative;">
-        <h3>Top MEPs (by selected topic)</h3>
-        <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">
-          <label>Topic: <input id="topMepTopic" placeholder="leave empty = all" style="width:280px"></label>
-          <button id="loadTopMep">Load</button>
-        </div>
-        <div class="loading-overlay" id="mepLoading"><div class="spinner"></div></div>
-        <table id="topMepTable" class="data-table">
-          <thead><tr><th>MEP</th><th>Country</th><th>Group</th><th>Speeches</th></tr></thead>
-          <tbody></tbody>
-        </table>
       </div>
     </div>
 
@@ -579,9 +593,149 @@
     🧠
   </div>
 
-  <!-- Refresh Button -->
-  <div id="refreshButton" style="position: fixed; bottom: 20px; right: 80px; z-index: 1000;">
-    <button id="refreshDataBtn" style="
+  <!-- Data Actions Dropdown (Refresh / Rebuild) -->
+  <div id="dataActionsContainer" style="position: fixed; bottom: 20px; right: 80px; z-index: 1000;">
+    <div id="dataActionsDropdown" onclick="event.stopPropagation()" style="
+      position: absolute;
+      bottom: 100%;
+      right: 0;
+      margin-bottom: 8px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+      min-width: 180px;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    ">
+      <button id="dataActionRefresh" style="
+        padding: 10px 14px;
+        border: none;
+        background: transparent;
+        color: #1e293b;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: background 0.15s;
+      " onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background='transparent'">1. Check New Sittings</button>
+      <button id="dataActionRefreshMepDataset" style="
+        padding: 10px 14px;
+        border: none;
+        background: transparent;
+        color: #0d9488;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-top: 1px solid #e5e7eb;
+        transition: background 0.15s;
+      " onmouseover="this.style.background='#ccfbf1'" onmouseout="this.style.background='transparent'">2. Build MEP Dataset</button>
+      <button id="dataActionRefreshLanguages" style="
+        padding: 10px 14px;
+        border: none;
+        background: transparent;
+        color: #1e40af;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-top: 1px solid #e5e7eb;
+        transition: background 0.15s;
+      " onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='transparent'">3. Refresh Languages</button>
+      <button id="dataActionNormalizeTopics" style="
+        padding: 10px 14px;
+        border: none;
+        background: transparent;
+        color: #4f46e5;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-top: 1px solid #e5e7eb;
+        transition: background 0.15s;
+      " onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='transparent'">4. Normalize Macro Topics</button>
+      <button id="dataActionNormalizeParties" style="
+        padding: 10px 14px;
+        border: none;
+        background: transparent;
+        color: #4f46e5;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-top: 1px solid #e5e7eb;
+        transition: background 0.15s;
+      " onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='transparent'">5. Normalize Parties</button>
+      <button id="dataActionAnalyze" style="
+        padding: 10px 14px;
+        border: none;
+        background: transparent;
+        color: #b45309;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-top: 1px solid #e5e7eb;
+        transition: background 0.15s;
+      " onmouseover="this.style.background='#fffbeb'" onmouseout="this.style.background='transparent'">6. Analyze (Generate Analytics DB)</button>
+      <button id="dataActionRebuild" style="
+        padding: 10px 14px;
+        border: none;
+        background: #fef2f2;
+        color: #991b1b;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-top: 1px solid #e5e7eb;
+        transition: background 0.15s;
+      " onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='#fef2f2'">Rebuild Database</button>
+    </div>
+    <div id="dataJobConsole" style="
+      position: absolute;
+      bottom: 100%;
+      right: 0;
+      margin-bottom: 8px;
+      min-width: 280px;
+      max-width: 420px;
+      padding: 8px 12px;
+      background: #1e293b;
+      color: #e2e8f0;
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      line-height: 1.4;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      opacity: 0;
+      max-height: 0;
+      overflow: hidden;
+      pointer-events: none;
+      transition: opacity 0.25s ease, max-height 0.25s ease, margin 0.25s ease;
+    " aria-live="polite"></div>
+    <button id="dataActionsToggle" style="
       background: var(--eu-blue);
       color: white;
       border: none;
@@ -595,12 +749,10 @@
       display: flex;
       align-items: center;
       gap: 8px;
-    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(0,0,0,0.2)'" 
-       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'">
-      <span id="refreshIcon">🔄</span>
-      <span id="refreshText">Refresh Data</span>
+    ">
+      <span id="dataActionsIcon"></span>
+      <span id="dataActionsText">Data</span>
     </button>
-    
     <!-- Cache Status Display -->
     <div id="cacheStatus" style="
       position: absolute;

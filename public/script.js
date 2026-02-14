@@ -1,3 +1,19 @@
+// EP term number for Europarl URLs (matches parliament-fetch.js)
+function getSessionNumber(date) {
+  if (!date) return 10;
+  if (date >= '2024-07-16') return 10;
+  if (date >= '2019-07-02') return 9;
+  if (date >= '2014-07-01') return 8;
+  if (date >= '2009-07-14') return 7;
+  if (date >= '2004-07-20') return 6;
+  if (date >= '1999-07-20') return 5;
+  if (date >= '1994-07-19') return 4;
+  if (date >= '1989-07-25') return 3;
+  if (date >= '1984-07-24') return 2;
+  if (date >= '1979-07-17') return 1;
+  return 1;
+}
+
 // Fetches a preview of a speech for a given date from the server
 async function fetchPreview(date) {
   try {
@@ -30,30 +46,13 @@ async function fetchPreview(date) {
       if (tab.dataset.tab === 'speeches') {
         loadSpeeches(mepSelect.value, true);
       }
-      // If switching to analytics tab, load analytics
+      // If switching to analytics tab: warm cache if needed, then load
       if (tab.dataset.tab === 'analytics') {
-        console.log('🔄 [ANALYTICS] Tab switched - checking cache status');
-        
-        // Check cache status first
-        checkCacheStatus().then(status => {
+        checkCacheStatusOnce().then(status => {
           if (status && status.ready) {
-            console.log('✅ [CACHE] Cache ready, loading analytics');
-            console.time('⏱️ [ANALYTICS] Total tab load time');
-            loadAnalytics();
-            loadTimeSeries().then(() => {
-              console.log('✅ [ANALYTICS] Time series loaded, loading other charts...');
-              // After time series loads and populates selectedTopics, load other charts
-              Promise.all([
-                loadGroupHeat(window.selectedTopics),
-                loadCountryHeat(window.selectedTopics),
-                loadLanguages(window.selectedTopics)
-              ]).then(() => {
-                console.timeEnd('⏱️ [ANALYTICS] Total tab load time');
-                console.log('✅ [ANALYTICS] All charts loaded successfully');
-              });
-            });
+            runAnalyticsLoad();
           } else {
-            console.log('⏳ [CACHE] Cache not ready yet, waiting...');
+            startAnalyticsWarmAndLoad();
           }
         });
       }
@@ -185,56 +184,6 @@ async function fetchPreview(date) {
   renderMepsTable();
   document.getElementById('total-count').textContent = filteredMeps.length;
   updateCharts(filteredMeps);
-  
-  // --- Historic MEP Linking functionality ---
-  const linkHistoricMepsBtn = document.getElementById('linkHistoricMepsBtn');
-  const linkingStatus = document.getElementById('linkingStatus');
-  
-  linkHistoricMepsBtn.addEventListener('click', async () => {
-    try {
-      linkHistoricMepsBtn.disabled = true;
-      linkHistoricMepsBtn.textContent = '🔄 Processing...';
-      linkingStatus.textContent = 'Creating historic MEPs and linking speeches...';
-      linkingStatus.style.color = 'var(--eu-blue)';
-      
-      const response = await fetch('/api/link-historic-meps', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        linkingStatus.textContent = `✅ Success! Created ${result.createdHistoricMeps} historic MEPs and linked ${result.linkedSpeeches} speeches.`;
-        linkingStatus.style.color = 'var(--eu-green)';
-        
-        // Refresh MEP data to show new historic MEPs
-        setTimeout(async () => {
-          const res = await fetch('/api/meps');
-          const json = await res.json();
-          mepsList = json.data || [];
-          filteredMeps = [...mepsList];
-          updateCharts(filteredMeps);
-          renderMepsTable();
-          document.getElementById('total-count').textContent = mepsList.length;
-        }, 2000);
-        
-      } else {
-        linkingStatus.textContent = `❌ Error: ${result.error}`;
-        linkingStatus.style.color = 'var(--eu-red)';
-      }
-      
-    } catch (error) {
-      console.error('Error linking historic MEPs:', error);
-      linkingStatus.textContent = `❌ Error: ${error.message}`;
-      linkingStatus.style.color = 'var(--eu-red)';
-    } finally {
-      linkHistoricMepsBtn.disabled = false;
-      linkHistoricMepsBtn.textContent = '🔗 Create Historic MEPs & Link Speeches';
-    }
-  });
 
   // --- Add filter event listeners ---
   statusFilter.addEventListener('change', applyFilters);
@@ -244,7 +193,7 @@ async function fetchPreview(date) {
 
   // --- Global function to view MEP details ---
   window.viewMepDetails = function(mepId) {
-    console.log(`🔍 [FRONTEND] Opening MEP details for ID: ${mepId}`);
+    console.log(`[FRONTEND] Opening MEP details for ID: ${mepId}`);
     window.open(`/mep-details.html?id=${mepId}`, '_blank');
   };
 
@@ -360,9 +309,10 @@ async function fetchPreview(date) {
     statsEl.textContent = `${speechesOffset}/${speechesTotal}`;
   
     tbody.innerHTML = displayData.map(s => {
-      const date = s.date || '';
+      const date = s.date || s.activity_date || '';
+      const session = date ? getSessionNumber(date) : 10;
       const htmlUrl = date
-        ? `https://www.europarl.europa.eu/doceo/document/CRE-10-${date}_EN.html`
+        ? `https://www.europarl.europa.eu/doceo/document/CRE-${session}-${date}_EN.html`
         : '#';
   
       return `
@@ -388,10 +338,10 @@ async function fetchPreview(date) {
           // Try the main preview API first
           let previewText = await fetchPreview(date);
           if (previewText === '—') {
-            // If the preview API fails, try to fetch the TOC page and extract some content
-            const tocUrl = `https://www.europarl.europa.eu/doceo/document/CRE-10-${date}-TOC_EN.html`;
+            const session = getSessionNumber(date);
+            const fallbackUrl = `https://www.europarl.europa.eu/doceo/document/CRE-${session}-${date}_EN.html`;
             try {
-              const resp = await fetch(tocUrl);
+              const resp = await fetch(fallbackUrl);
               if (resp.ok) {
                 const html = await resp.text();
                 // Try to extract the first item or a summary from the TOC HTML
@@ -496,47 +446,49 @@ async function fetchPreview(date) {
       loadSpeeches(mepSelect.value, true);
     }
     if (tab.dataset.tab === 'analytics' && tab.classList.contains('active')) {
-      console.log('🔄 [ANALYTICS] Initial load - checking cache status');
-      
-      // Check cache status first
-      checkCacheStatus().then(status => {
+      checkCacheStatusOnce().then(status => {
         if (status && status.ready) {
-          console.log('✅ [CACHE] Cache ready, loading analytics');
-          console.time('⏱️ [ANALYTICS] Initial total load time');
-          loadAnalytics();
-          loadTimeSeries().then(() => {
-            console.log('✅ [ANALYTICS] Time series loaded, loading other charts...');
-            // After time series loads and populates selectedTopics, load other charts
-            Promise.all([
-              loadGroupHeat(window.selectedTopics),
-              loadCountryHeat(window.selectedTopics),
-              loadLanguages(window.selectedTopics)
-            ]).then(() => {
-              console.timeEnd('⏱️ [ANALYTICS] Initial total load time');
-              console.log('✅ [ANALYTICS] All charts loaded successfully');
-            });
-          });
+          runAnalyticsLoad();
         } else {
-          console.log('⏳ [CACHE] Cache not ready yet, waiting...');
+          startAnalyticsWarmAndLoad();
         }
       });
     }
   });
+
+  // Auto-start analytics warm when opening tab (no Calculate button)
+  async function startAnalyticsWarmAndLoad() {
+    const progressDiv = document.getElementById('cacheLoadingProgress');
+    if (progressDiv) progressDiv.style.display = 'block';
+    try {
+      const warmRes = await fetch('/api/analytics/warm', { method: 'POST' });
+      const warmData = await warmRes.json();
+      if (warmData.ready) {
+        runAnalyticsLoad();
+      } else if (warmData.started || warmData.warming) {
+        await checkCacheStatus();
+        runAnalyticsLoad();
+      }
+    } catch (e) {
+      console.error('Analytics warm failed:', e);
+      if (progressDiv) progressDiv.style.display = 'none';
+    }
+  }
 })();
 
 // --- Descriptive Analytics ---
 async function loadAnalytics() {
   try {
-    console.time('⏱️ [ANALYTICS] Total loadAnalytics');
+    console.time('[ANALYTICS] Total loadAnalytics');
     document.getElementById('trendLoading')?.classList.add('active');
     document.getElementById('groupLoading')?.classList.add('active');
     document.getElementById('countryLoading')?.classList.add('active');
     document.getElementById('langLoading')?.classList.add('active');
     
-    console.time('⏱️ [ANALYTICS] Fetch overview API');
+    console.time('[ANALYTICS] Fetch overview API');
     const res = await fetch('/api/analytics/overview');
     const data = await res.json();
-    console.timeEnd('⏱️ [ANALYTICS] Fetch overview API');
+    console.timeEnd('[ANALYTICS] Fetch overview API');
     
     if (!data || data.error) throw new Error(data?.error || 'Analytics API error');
 
@@ -548,6 +500,8 @@ async function loadAnalytics() {
 
     // Top Macro Topics bar
     const macroLabels = (data.macroTopicDistribution || []).map(r => r.topic);
+    window.macroTopicsFromOverview = macroLabels;
+    updateTopMepTopicDropdown();
     const macroCounts = (data.macroTopicDistribution || []).map(r => r.count);
     const macroCtx = document.getElementById('macroTopicChart');
     if (macroCtx) {
@@ -603,7 +557,7 @@ async function loadAnalytics() {
     document.getElementById('groupLoading')?.classList.remove('active');
     document.getElementById('countryLoading')?.classList.remove('active');
     document.getElementById('langLoading')?.classList.remove('active');
-    console.timeEnd('⏱️ [ANALYTICS] Total loadAnalytics');
+    console.timeEnd('[ANALYTICS] Total loadAnalytics');
   }
 }
 
@@ -638,7 +592,29 @@ function calculateMovingAverage(data, windowSize) {
   return result;
 }
 
-// Check cache status and show loading progress
+// One-shot cache status check (no polling)
+async function checkCacheStatusOnce() {
+  try {
+    const res = await fetch('/api/analytics/cache-status');
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+// Run full analytics load (overview, time series, charts)
+function runAnalyticsLoad() {
+  document.getElementById('cacheLoadingProgress')?.style.setProperty('display', 'none');
+  loadAnalytics();
+  loadTimeSeries().then(() => {
+    Promise.all([
+      loadGroupHeat(window.selectedTopics),
+      loadLanguageHeat(window.selectedTopics)
+    ]);
+  });
+}
+
+// Check cache status and show loading progress (polls until ready when warming)
 async function checkCacheStatus() {
   try {
     const res = await fetch('/api/analytics/cache-status');
@@ -654,7 +630,7 @@ async function checkCacheStatus() {
     if (status.ready) {
       // Cache is ready - hide progress bar
       progressDiv.style.display = 'none';
-      console.log('✅ [CACHE] Cache is ready!');
+      console.log('[CACHE] Cache is ready!');
       return status;
     } else if (status.warming) {
       // Cache is warming - show progress
@@ -663,7 +639,7 @@ async function checkCacheStatus() {
       progressBar.style.width = percent + '%';
       progressPercent.textContent = percent + '%';
       progressMessage.textContent = status.progress?.message || 'Loading...';
-      console.log(`⏳ [CACHE] Warming... ${percent}% - ${status.progress?.message}`);
+      console.log(`[CACHE] Warming... ${percent}% - ${status.progress?.message}`);
       
       // Poll again in 500ms and continue when ready
       return new Promise(resolve => {
@@ -672,19 +648,9 @@ async function checkCacheStatus() {
         }, 500);
       });
     } else {
-      // Cache not started yet - show waiting message
-      progressDiv.style.display = 'block';
-      progressBar.style.width = '0%';
-      progressPercent.textContent = '';
-      progressMessage.textContent = 'Initializing analytics cache...';
-      console.log('⏳ [CACHE] Cache not started yet, waiting...');
-      
-      // Poll again in 1s
-      return new Promise(resolve => {
-        setTimeout(() => {
-          checkCacheStatus().then(resolve);
-        }, 1000);
-      });
+      // Cache not started - return so caller can show Calculate button (no auto-poll)
+      progressDiv.style.display = 'none';
+      return status;
     }
   } catch (error) {
     console.error('Error checking cache status:', error);
@@ -694,24 +660,32 @@ async function checkCacheStatus() {
 
 // Helpers for extended analytics
 async function loadTimeSeries() {
-  console.time('⏱️ [TRENDS] Total loadTimeSeries');
+  console.time('[TRENDS] Total loadTimeSeries');
   document.getElementById('trendLoading')?.classList.add('active');
-  // Read granularity from radio buttons
-  const interval = document.getElementById('granQuarter')?.checked ? 'quarter' : 'month';
+  // Read granularity from radio buttons (month | quarter | year)
+  const interval = document.getElementById('granYear')?.checked ? 'year' : document.getElementById('granQuarter')?.checked ? 'quarter' : 'month';
+  const fromInput = document.getElementById('timeFilterFrom');
+  const toInput = document.getElementById('timeFilterTo');
+  const from = (fromInput && fromInput.value.trim()) || '';
+  const to = (toInput && toInput.value.trim()) || '';
+  
   const params = new URLSearchParams();
   params.set('interval', interval);
-  params.set('all', 'true'); // always fetch all topics over full range
+  params.set('all', 'true');
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
   
   // Update title based on granularity
   const titleEl = document.getElementById('trendChartTitle');
+  const intervalLabels = { month: 'Monthly', quarter: 'Quarterly', year: 'Yearly' };
   if (titleEl) {
-    titleEl.textContent = interval === 'quarter' ? 'Quarterly Trends (Top Topics)' : 'Monthly Trends (Top Topics)';
+    titleEl.textContent = (intervalLabels[interval] || '') + ' Trends (Top Topics)' + (from || to ? ` ${from || '…'} – ${to || '…'}` : '');
   }
   
-  console.time('⏱️ [TRENDS] Fetch time-series API');
+  console.time('[TRENDS] Fetch time-series API');
   const res = await fetch('/api/analytics/time-series?' + params.toString());
   const json = await res.json();
-  console.timeEnd('⏱️ [TRENDS] Fetch time-series API');
+  console.timeEnd('[TRENDS] Fetch time-series API');
 
   // If no datasets, clear UI
   if (!json.datasets || !json.datasets.length) {
@@ -726,15 +700,19 @@ async function loadTimeSeries() {
 
   // Build topic selector for ALL topics in this range
   const allLabels = (json.datasets || []).map(ds => ds.label).sort((a,b)=>a.localeCompare(b));
-  window.selectedTopics = [...allLabels]; // Initialize with all topics selected
+  // Preserve current topic selection: only keep topics that still exist in the new list
+  const previousSelection = Array.isArray(window.selectedTopics) ? window.selectedTopics : [];
+  window.selectedTopics = previousSelection.filter(t => allLabels.includes(t));
   window.allAvailableTopics = [...allLabels]; // Store all available topics
+  updateTopMepTopicDropdown();
   
   const selector = document.getElementById('topicSelector');
   if (selector) {
     selector.innerHTML = allLabels.map(label => {
       const id = 'sel_' + label.replace(/[^a-z0-9]/gi,'_');
+      const checked = window.selectedTopics.includes(label) ? ' checked' : '';
       return `<label style=\"display:flex; align-items:center; gap:6px; font-size:13px; color:#374151; padding:4px 6px; border-radius:4px; background:#fff; border:1px solid #e2e8f0;\">\
-        <input type=\"checkbox\" class=\"topicCheck\" id=\"${id}\" data-label=\"${label}\" checked>\
+        <input type=\"checkbox\" class=\"topicCheck\" id=\"${id}\" data-label=\"${label}\"${checked}>\
         <span title=\"${label}\" style=\"overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;\">${label}</span>\
       </label>`;
     }).join('');
@@ -765,24 +743,59 @@ async function loadTimeSeries() {
   ];
   window.getDistinctColor = (i) => distinctColors[i % distinctColors.length];
   
-  let datasets = (json.datasets||[]).map((d, i) => ({
+  const labels = json.labels || [];
+  // Start with only selected topics (default: none)
+  const initialDatasets = (json.datasets || []).filter(d => window.selectedTopics.includes(d.label));
+  let datasets = initialDatasets.map((d, i) => ({
     ...d,
     borderColor: window.getDistinctColor(i),
-    backgroundColor: window.getDistinctColor(i),
+    backgroundColor: window.getDistinctColor(i) + '40',
     tension: 0.2,
-    borderWidth: 2
+    borderWidth: 2,
+    pointRadius: 3,
+    pointHoverRadius: 5
   }));
+
+  // Compute data max so y-axis scale shows actual counts (not 0–1 when all zeros)
+  const dataMax = Math.max(1, ...datasets.flatMap(d => (d.data || []).filter(v => typeof v === 'number')));
+  const yAxisMax = dataMax > 0 ? undefined : 10; // when all zeros, show 0–10 so "0" is clearly at bottom
+
   new Chart(ctx.getContext('2d'), {
     type: 'line',
-    data: { labels: json.labels || [], datasets },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8 } },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const v = context.parsed.y;
+              const period = labels[context.dataIndex] || '';
+              return context.dataset.label + ': ' + v + ' speech' + (v === 1 ? '' : 'es') + (period ? ' (' + period + ')' : '');
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grace: '8%',
+          title: { display: true, text: 'Number of speeches' },
+          ...(yAxisMax != null && { suggestedMax: yAxisMax })
+        },
+        x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 24 } }
+      }
+    }
   });
 
   // Initialize filter controls after chart is created
   initializeFilterControls();
 
   document.getElementById('trendLoading')?.classList.remove('active');
-  console.timeEnd('⏱️ [TRENDS] Total loadTimeSeries');
+  console.timeEnd('[TRENDS] Total loadTimeSeries');
 }
 
 // Apply topic filter function (accessible globally)
@@ -791,17 +804,21 @@ window.applyTopicFilter = async function() {
     .filter(c=>c.checked)
     .map(c=>c.getAttribute('data-label'));
   
-  console.log(`🔄 [FILTER] Applying filter with ${selected.length} topics`);
+  console.log(`[FILTER] Applying filter with ${selected.length} topics`);
   
   // Update global selected topics
   window.selectedTopics = selected;
   
-  // Update trend chart
+  // Update trend chart — ensure lines are clearly visible when topic filter is applied
   const ctx = document.getElementById('trendChart');
   const chart = Chart.getChart(ctx);
   if (chart && window.trendChartData) {
     const showSmooth = document.getElementById('showSmoothAvg')?.checked;
     const windowSize = parseInt(document.getElementById('smoothWindow')?.value || '6');
+    const numSelected = selected.length;
+    // Thicker, opaque lines when few topics selected so they stand out
+    const lineWidth = numSelected <= 10 ? 3 : numSelected <= 20 ? 2.5 : 2;
+    const pointRad = numSelected <= 10 ? 4 : numSelected <= 20 ? 3 : 2;
     
     let datasets = (window.trendChartData.datasets||[])
       .filter(ds => selected.includes(ds.label))
@@ -810,13 +827,14 @@ window.applyTopicFilter = async function() {
         return {
           ...d,
           label: d.label,
-          borderColor: showSmooth ? color + '40' : color, // Light/transparent when smooth is on
-          backgroundColor: showSmooth ? color + '20' : color + '40',
+          borderColor: color,
+          backgroundColor: color + '30',
           tension: 0.2,
-          borderWidth: showSmooth ? 1 : 2, // Thinner when smooth is on
-          borderDash: [], // Solid line for actual data
-          pointRadius: showSmooth ? 2 : 3, // Smaller points when smooth is on
-          pointBackgroundColor: showSmooth ? color + '60' : color
+          borderWidth: showSmooth ? 1 : lineWidth,
+          borderDash: [],
+          pointRadius: showSmooth ? 2 : pointRad,
+          pointHoverRadius: pointRad + 2,
+          pointBackgroundColor: color
         };
       });
     
@@ -825,33 +843,38 @@ window.applyTopicFilter = async function() {
       const smoothDatasets = datasets.map((d, i) => {
         const color = window.getDistinctColor(i);
         return {
-          label: d.label.replace(/ \(avg\)$/, '') + ' (trend)',
+          label: (d.label || '').replace(/ \(trend\)$/, '') + ' (trend)',
           data: calculateMovingAverage(d.data, windowSize),
-          borderColor: color, // Full opacity for trend line
+          borderColor: color,
           backgroundColor: color,
           tension: 0.4,
-          borderWidth: 3, // Thick line for visibility
-          borderDash: [], // Solid line for trend
+          borderWidth: 3,
+          borderDash: [],
           pointRadius: 0,
           fill: false,
-          order: -1 // Draw on top
+          order: -1
         };
       });
       datasets = [...datasets, ...smoothDatasets];
     }
     
     chart.data.datasets = datasets;
+    const dataMax = Math.max(1, ...datasets.flatMap(d => (d.data || []).filter(v => typeof v === 'number')));
+    if (chart.options.scales && chart.options.scales.y) {
+      chart.options.scales.y.grace = '8%';
+      chart.options.scales.y.title = chart.options.scales.y.title || { display: true, text: 'Number of speeches' };
+      chart.options.scales.y.suggestedMax = dataMax > 0 ? undefined : 10;
+    }
     chart.update();
   }
   
   // Update the other three charts with the selected topics
   await Promise.all([
     loadGroupHeat(selected),
-    loadCountryHeat(selected),
-    loadLanguages(selected)
+    loadLanguageHeat(selected)
   ]);
   
-  console.log('✅ [FILTER] All charts updated');
+  console.log('[FILTER] All charts updated');
 };
 
 // Initialize Apply button listener (called after loadTimeSeries)
@@ -938,16 +961,16 @@ function initializeFilterControls() {
 }
 
 async function loadGroupHeat(selectedTopics = null) {
-  console.time('⏱️ [GROUPS] loadGroupHeat');
+  console.time('[GROUPS] loadGroupHeat');
   document.getElementById('groupLoading')?.classList.add('active');
   const params = new URLSearchParams();
   if (selectedTopics && selectedTopics.length > 0) {
     params.set('topics', JSON.stringify(selectedTopics));
   }
-  console.time('⏱️ [GROUPS] Fetch by-group API');
+  console.time('[GROUPS] Fetch by-group API');
   const res = await fetch('/api/analytics/by-group?' + params.toString());
   const json = await res.json();
-  console.timeEnd('⏱️ [GROUPS] Fetch by-group API');
+  console.timeEnd('[GROUPS] Fetch by-group API');
   const topics = json.topics || [];
   const groups = json.groups || [];
   const matrix = topics.map(t => groups.map(g => {
@@ -958,80 +981,174 @@ async function loadGroupHeat(selectedTopics = null) {
   const existing = Chart.getChart(ctx);
   if (existing) existing.destroy();
   // Render stacked bar: one dataset per topic, labels=groups
-  const datasets = topics.map((t,i) => ({ label: t, data: matrix[i], backgroundColor: `hsl(${(i*360)/Math.max(1,topics.length)},60%,60%)` }));
+  const datasets = topics.map((t,i) => ({
+    label: t,
+    data: matrix[i],
+    backgroundColor: `hsl(${(i*360)/Math.max(1,topics.length)},60%,60%)`,
+    barPercentage: 0.75,
+    categoryPercentage: 0.85
+  }));
   new Chart(ctx.getContext('2d'), {
     type: 'bar',
     data: { labels: groups, datasets },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { top: 12, right: 16, bottom: 8, left: 8 } },
+      plugins: { legend: { position: 'bottom', labels: { padding: 14, boxWidth: 14 } } },
+      scales: {
+        x: {
+          stacked: true,
+          ticks: { maxRotation: 55, minRotation: 45, padding: 8, maxTicksLimit: 20, font: { size: 11 } },
+          grid: { display: false }
+        },
+        y: { stacked: true, beginAtZero: true, ticks: { padding: 8 } }
+      }
+    }
   });
   document.getElementById('groupLoading')?.classList.remove('active');
-  console.timeEnd('⏱️ [GROUPS] loadGroupHeat');
+  console.timeEnd('[GROUPS] loadGroupHeat');
 }
 
-async function loadCountryHeat(selectedTopics = null) {
-  console.time('⏱️ [COUNTRIES] loadCountryHeat');
-  document.getElementById('countryLoading')?.classList.add('active');
+async function loadLanguageHeat(selectedTopics = null) {
+  console.time('[LANGUAGES] loadLanguageHeat');
+  document.getElementById('languageLoading')?.classList.add('active');
   const params = new URLSearchParams();
   if (selectedTopics && selectedTopics.length > 0) {
     params.set('topics', JSON.stringify(selectedTopics));
   }
-  console.time('⏱️ [COUNTRIES] Fetch by-country API');
-  const res = await fetch('/api/analytics/by-country?' + params.toString());
+  const res = await fetch('/api/analytics/by-language?' + params.toString());
   const json = await res.json();
-  console.timeEnd('⏱️ [COUNTRIES] Fetch by-country API');
   const topics = json.topics || [];
-  const countries = json.countries || [];
-  const matrix = topics.map(t => countries.map(c => {
-    const r = (json.rows||[]).find(x => x.topic===t && x.country===c);
+  const languages = json.languages || [];
+  const matrix = topics.map(t => languages.map(lang => {
+    const r = (json.rows || []).find(x => x.topic === t && x.language === lang);
     return r ? r.cnt : 0;
   }));
-  const ctx = document.getElementById('countryHeat');
+  const ctx = document.getElementById('languageHeat');
   const existing = Chart.getChart(ctx);
   if (existing) existing.destroy();
-  const datasets = topics.map((t,i) => ({ label: t, data: matrix[i], backgroundColor: `hsl(${(i*360)/Math.max(1,topics.length)},60%,70%)` }));
+  const datasets = topics.map((t, i) => ({
+    label: t,
+    data: matrix[i],
+    backgroundColor: `hsl(${(i * 360) / Math.max(1, topics.length)},60%,70%)`,
+    barPercentage: 0.75,
+    categoryPercentage: 0.85
+  }));
   new Chart(ctx.getContext('2d'), {
     type: 'bar',
-    data: { labels: countries, datasets },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }
+    data: { labels: languages, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { top: 12, right: 16, bottom: 8, left: 8 } },
+      plugins: { legend: { position: 'bottom', labels: { padding: 14, boxWidth: 14 } } },
+      scales: {
+        x: {
+          stacked: true,
+          ticks: { maxRotation: 55, minRotation: 45, padding: 8, maxTicksLimit: 24, font: { size: 11 } },
+          grid: { display: false }
+        },
+        y: { stacked: true, beginAtZero: true, ticks: { padding: 8 } }
+      }
+    }
   });
-  document.getElementById('countryLoading')?.classList.remove('active');
-  console.timeEnd('⏱️ [COUNTRIES] loadCountryHeat');
+  document.getElementById('languageLoading')?.classList.remove('active');
+  console.timeEnd('[LANGUAGES] loadLanguageHeat');
 }
 
-async function loadLanguages(selectedTopics = null) {
-  console.time('⏱️ [LANGUAGES] loadLanguages');
-  document.getElementById('langLoading')?.classList.add('active');
-  const params = new URLSearchParams();
-  if (selectedTopics && selectedTopics.length > 0) {
-    params.set('topics', JSON.stringify(selectedTopics));
+// Macro topics list for Top MEPs dropdown (set by loadAnalytics / loadTimeSeries)
+window.macroTopicsFromOverview = [];
+
+function updateTopMepTopicDropdown() {
+  const topics = (window.allAvailableTopics && window.allAvailableTopics.length)
+    ? window.allAvailableTopics
+    : (window.macroTopicsFromOverview || []);
+  window.topMepTopicList = [...new Set(topics)].sort((a, b) => a.localeCompare(b));
+  // Re-render list if dropdown is open
+  const listEl = document.getElementById('topMepTopicList');
+  const inputEl = document.getElementById('topMepTopic');
+  if (listEl && inputEl && listEl.style.display !== 'none') {
+    renderTopMepTopicOptions(listEl, inputEl.value.trim());
   }
-  console.time('⏱️ [LANGUAGES] Fetch languages API');
-  const res = await fetch('/api/analytics/languages?' + params.toString());
-  const json = await res.json();
-  console.timeEnd('⏱️ [LANGUAGES] Fetch languages API');
-  const labels = (json.rows||[]).map(r => r.language);
-  const data = (json.rows||[]).map(r => r.cnt);
-  const ctx = document.getElementById('langChart');
-  const existing = Chart.getChart(ctx);
-  if (existing) existing.destroy();
-  new Chart(ctx.getContext('2d'), {
-    type: 'doughnut',
-    data: { labels, datasets: [{ data, backgroundColor: labels.map((_,i)=>`hsl(${(i*360)/Math.max(1,labels.length)},70%,60%)`) }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+}
+
+function renderTopMepTopicOptions(listEl, filter) {
+  const topics = window.topMepTopicList || [];
+  const q = (filter || '').toLowerCase();
+  const filtered = q ? topics.filter(t => t.toLowerCase().includes(q)) : topics;
+  listEl.innerHTML = [
+    '<div class="top-mep-topic-option" data-value="">(All topics)</div>',
+    ...filtered.map(t => `<div class="top-mep-topic-option" data-value="${escapeAttr(t)}">${escapeHtml(t)}</div>`)
+  ].join('');
+  listEl.style.display = 'block';
+}
+function escapeAttr(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function wireTopMepTopicDropdown() {
+  const input = document.getElementById('topMepTopic');
+  const list = document.getElementById('topMepTopicList');
+  if (!input || !list) return;
+  let blurTimer = null;
+  input.addEventListener('focus', () => {
+    clearTimeout(blurTimer);
+    renderTopMepTopicOptions(list, input.value.trim());
+    list.style.display = 'block';
   });
-  document.getElementById('langLoading')?.classList.remove('active');
-  console.timeEnd('⏱️ [LANGUAGES] loadLanguages');
+  input.addEventListener('input', () => {
+    renderTopMepTopicOptions(list, input.value.trim());
+    list.style.display = 'block';
+  });
+  input.addEventListener('blur', () => {
+    blurTimer = setTimeout(() => { list.style.display = 'none'; }, 180);
+  });
+  list.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const opt = e.target.closest('.top-mep-topic-option');
+    if (!opt) return;
+    const val = opt.getAttribute('data-value') || '';
+    input.value = val;
+    list.style.display = 'none';
+    input.focus();
+  });
 }
 
 async function loadTopMeps() {
-  document.getElementById('mepLoading')?.classList.add('active');
-  const topic = document.getElementById('topMepTopic').value.trim();
+  const topicInput = document.getElementById('topMepTopic');
+  const topic = topicInput?.value.trim() || '';
   const params = new URLSearchParams();
   if (topic) params.set('topic', topic);
+  params.set('top', '10');
+  document.getElementById('mepLoading')?.classList.add('active');
   const res = await fetch('/api/analytics/top-meps?' + params.toString());
   const json = await res.json();
   const tbody = document.querySelector('#topMepTable tbody');
-  tbody.innerHTML = (json.rows||[]).map(r => `<tr><td>${r.label||'(Unknown)'}</td><td>${r.country||''}</td><td>${r.grp||''}</td><td>${r.cnt}</td></tr>`).join('');
+  const rows = json.rows || [];
+  const topicForLink = topic ? encodeURIComponent(topic) : '';
+  tbody.innerHTML = rows.length === 0
+    ? '<tr><td colspan="4" style="color:#64748b;padding:1rem;">No data. Select a topic and click Load, or leave empty for top 10 across all topics.</td></tr>'
+    : rows.map(r => {
+        const displayName = r.label && r.label.trim() ? r.label.trim() : '(Unknown)';
+        const href = r.id != null
+          ? (topicForLink ? `/mep-details.html?id=${r.id}&macro_topic=${topicForLink}` : `/mep-details.html?id=${r.id}`)
+          : '#';
+        const mepCell = r.id != null
+          ? `<a href="${href}" target="_blank" rel="noopener" class="mep-profile-link">${displayName}</a>`
+          : displayName;
+        return `<tr><td>${mepCell}</td><td>${r.country || ''}</td><td>${r.grp || ''}</td><td>${r.cnt}</td></tr>`;
+      }).join('');
   document.getElementById('mepLoading')?.classList.remove('active');
 }
 
@@ -1040,25 +1157,31 @@ document.addEventListener('click', (e) => {
   if (e.target && e.target.id === 'anaApply') {
     loadTimeSeries();
     loadGroupHeat();
-    loadCountryHeat();
-    loadLanguages();
+    loadLanguageHeat();
   }
   if (e.target && e.target.id === 'loadTopMep') {
     loadTopMeps();
   }
 });
 
-// Wire analytics controls for granularity radios
+// Wire analytics controls for granularity radios and time filter
 document.addEventListener('change', (e) => {
-  if (e.target && (e.target.id === 'granMonth' || e.target.id === 'granQuarter')) {
+  if (e.target && (e.target.id === 'granMonth' || e.target.id === 'granQuarter' || e.target.id === 'granYear')) {
     loadTimeSeries().then(() => {
-      // After time series reloads with new granularity, reload other charts
       loadGroupHeat(window.selectedTopics);
-      loadCountryHeat(window.selectedTopics);
-      loadLanguages(window.selectedTopics);
+      loadLanguageHeat(window.selectedTopics);
     });
   }
 });
+const applyTimeFilterBtn = document.getElementById('applyTimeFilter');
+if (applyTimeFilterBtn) {
+  applyTimeFilterBtn.addEventListener('click', () => {
+    loadTimeSeries().then(() => {
+      loadGroupHeat(window.selectedTopics);
+      loadLanguageHeat(window.selectedTopics);
+    });
+  });
+}
 
 // --- Modal chart viewer ---
 let modalChartInst = null;
@@ -1121,15 +1244,63 @@ function wireEnlargeableCharts() {
       const chart = Chart.getChart(macroCanvas);
       if (!chart) return;
       const ds = chart.data.datasets.map(d => ({ ...d }));
+      // Apply bar thickness settings to dataset
+      ds.forEach(dataset => {
+        dataset.maxBarThickness = 40;
+        dataset.categoryPercentage = 0.7;
+        dataset.barPercentage = 0.9;
+      });
       const modalInst = new Chart(document.getElementById('modalChart').getContext('2d'), {
         type: 'bar',
         data: { labels: chart.data.labels.slice(), datasets: ds },
         options: { 
           responsive: true, 
           maintainAspectRatio: false, 
-          indexAxis: 'y', 
-          scales: { x: { beginAtZero: true } }, 
-          plugins: { legend: { display: false } } 
+          indexAxis: 'y',
+          layout: {
+            padding: {
+              top: 20,
+              bottom: 20,
+              left: 10,
+              right: 10
+            }
+          },
+          scales: { 
+            x: { 
+              beginAtZero: true,
+              ticks: {
+                font: {
+                  size: 16
+                }
+              },
+              title: {
+                display: true,
+                text: 'Number of Speeches',
+                font: {
+                  size: 18
+                }
+              }
+            },
+            y: {
+              ticks: {
+                font: {
+                  size: 16
+                }
+              }
+            }
+          }, 
+          plugins: { 
+            legend: { display: false },
+            tooltip: {
+              titleFont: {
+                size: 18
+              },
+              bodyFont: {
+                size: 16
+              },
+              padding: 12
+            }
+          } 
         }
       });
       const modal = document.getElementById('chartModal');
@@ -1148,15 +1319,63 @@ function wireEnlargeableCharts() {
       const chart = Chart.getChart(focusCanvas);
       if (!chart) return;
       const ds = chart.data.datasets.map(d => ({ ...d }));
+      // Apply bar thickness settings to dataset
+      ds.forEach(dataset => {
+        dataset.maxBarThickness = 40;
+        dataset.categoryPercentage = 0.7;
+        dataset.barPercentage = 0.9;
+      });
       const modalInst = new Chart(document.getElementById('modalChart').getContext('2d'), {
         type: 'bar',
         data: { labels: chart.data.labels.slice(), datasets: ds },
         options: { 
           responsive: true, 
           maintainAspectRatio: false, 
-          indexAxis: 'y', 
-          scales: { x: { beginAtZero: true } }, 
-          plugins: { legend: { display: false } } 
+          indexAxis: 'y',
+          layout: {
+            padding: {
+              top: 20,
+              bottom: 20,
+              left: 10,
+              right: 10
+            }
+          },
+          scales: { 
+            x: { 
+              beginAtZero: true,
+              ticks: {
+                font: {
+                  size: 16
+                }
+              },
+              title: {
+                display: true,
+                text: 'Number of Speeches',
+                font: {
+                  size: 18
+                }
+              }
+            },
+            y: {
+              ticks: {
+                font: {
+                  size: 16
+                }
+              }
+            }
+          }, 
+          plugins: { 
+            legend: { display: false },
+            tooltip: {
+              titleFont: {
+                size: 18
+              },
+              bodyFont: {
+                size: 16
+              },
+              padding: 12
+            }
+          } 
         }
       });
       const modal = document.getElementById('chartModal');
@@ -1209,56 +1428,30 @@ function wireEnlargeableCharts() {
     });
   }
   
-  // Country chart - horizontal stacked bar
-  const countryCanvas = document.getElementById('countryHeat');
-  if (countryCanvas) {
-    countryCanvas.parentElement.style.cursor = 'zoom-in';
-    countryCanvas.parentElement.addEventListener('click', () => {
-      const chart = Chart.getChart(countryCanvas);
+  // Macro Topics × Languages - stacked bar
+  const languageCanvas = document.getElementById('languageHeat');
+  if (languageCanvas) {
+    languageCanvas.parentElement.style.cursor = 'zoom-in';
+    languageCanvas.parentElement.addEventListener('click', () => {
+      const chart = Chart.getChart(languageCanvas);
       if (!chart) return;
       const ds = chart.data.datasets.map(d => ({ ...d }));
       const modalInst = new Chart(document.getElementById('modalChart').getContext('2d'), {
         type: 'bar',
         data: { labels: chart.data.labels.slice(), datasets: ds },
-        options: { 
-          responsive: true, 
-          maintainAspectRatio: false, 
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
           indexAxis: 'y',
-          plugins: { legend: { position: 'bottom' } }, 
-          scales: { 
+          plugins: { legend: { position: 'bottom' } },
+          scales: {
             x: { stacked: true, beginAtZero: true },
             y: { stacked: true }
           }
         }
       });
-      const modal = document.getElementById('chartModal');
-      document.getElementById('chartModalTitle').textContent = 'Macro Topics × Countries';
-      modal.style.display = 'block';
-      if (window.currentModalChart) window.currentModalChart.destroy();
-      window.currentModalChart = modalInst;
-    });
-  }
-  
-  // Languages chart - doughnut
-  const langCanvas = document.getElementById('langChart');
-  if (langCanvas) {
-    langCanvas.parentElement.style.cursor = 'zoom-in';
-    langCanvas.parentElement.addEventListener('click', () => {
-      const chart = Chart.getChart(langCanvas);
-      if (!chart) return;
-      const ds = chart.data.datasets.map(d => ({ ...d }));
-      const modalInst = new Chart(document.getElementById('modalChart').getContext('2d'), {
-        type: 'doughnut',
-        data: { labels: chart.data.labels.slice(), datasets: ds },
-        options: { 
-          responsive: true, 
-          maintainAspectRatio: false,
-          plugins: { legend: { position: 'right' } }
-        }
-      });
-      const modal = document.getElementById('chartModal');
-      document.getElementById('chartModalTitle').textContent = 'Languages';
-      modal.style.display = 'block';
+      document.getElementById('chartModalTitle').textContent = 'Macro Topics × Languages';
+      document.getElementById('chartModal').style.display = 'block';
       if (window.currentModalChart) window.currentModalChart.destroy();
       window.currentModalChart = modalInst;
     });
@@ -1267,125 +1460,83 @@ function wireEnlargeableCharts() {
 
 // Wire after analytics load
 document.addEventListener('DOMContentLoaded', () => {
+  wireTopMepTopicDropdown();
   setTimeout(wireEnlargeableCharts, 1000);
 });
 
 
-// Refresh Button Functionality
-(function() {
-  const refreshBtn = document.getElementById('refreshDataBtn');
-  const refreshIcon = document.getElementById('refreshIcon');
-  const refreshText = document.getElementById('refreshText');
+// Data Actions Dropdown (Refresh / Rebuild) — only shown when LOCALRUN env is set
+(async function() {
+  const container = document.getElementById('dataActionsContainer');
+  const toggleBtn = document.getElementById('dataActionsToggle');
+  const dropdown = document.getElementById('dataActionsDropdown');
+  const jobConsoleEl = document.getElementById('dataJobConsole');
+  const refreshBtn = document.getElementById('dataActionRefresh');
+  const refreshMepDatasetBtn = document.getElementById('dataActionRefreshMepDataset');
+  const rebuildBtn = document.getElementById('dataActionRebuild');
+  const refreshLanguagesBtn = document.getElementById('dataActionRefreshLanguages');
+  const normalizeTopicsBtn = document.getElementById('dataActionNormalizeTopics');
+  const normalizePartiesBtn = document.getElementById('dataActionNormalizeParties');
+  const iconEl = document.getElementById('dataActionsIcon');
+  const textEl = document.getElementById('dataActionsText');
   const cacheStatus = document.getElementById('cacheStatus');
   const mepCountSpan = document.getElementById('mepCount');
   const speechCountSpan = document.getElementById('speechCount');
   const lastUpdatedSpan = document.getElementById('lastUpdated');
-  
-  let isRefreshing = false;
-  
-  // Load cache status on page load
-  async function loadCacheStatus() {
-    try {
-      console.log('🔄 [FRONTEND] Loading cache status...');
-      const response = await fetch('/api/cache-status');
-      const status = await response.json();
-      
-      console.log('📊 [FRONTEND] Cache status received:', status);
-      
-      mepCountSpan.textContent = status.meps_last_updated ? 'Cached' : 'Not cached';
-      speechCountSpan.textContent = status.total_speeches || 0;
-      
-      if (status.speeches_last_updated) {
-        const date = new Date(status.speeches_last_updated);
-        lastUpdatedSpan.textContent = date.toLocaleString();
-        console.log(`✅ [FRONTEND] Cache status loaded - MEPs: ${status.meps_last_updated ? 'Cached' : 'Not cached'}, Speeches: ${status.total_speeches}, Last updated: ${date.toLocaleString()}`);
-      } else {
-        lastUpdatedSpan.textContent = 'Never';
-        console.log('⚠️ [FRONTEND] No cache data found');
-      }
-    } catch (error) {
-      console.error('❌ [FRONTEND] Error loading cache status:', error);
+
+  if (!toggleBtn || !dropdown) return;
+
+  try {
+    const res = await fetch('/api/localrun');
+    const data = await res.json();
+    if (!data.localrun) {
+      if (container) container.style.display = 'none';
+      return;
     }
+  } catch (_) {
+    if (container) container.style.display = 'none';
+    return;
   }
-  
-  // Show/hide cache status
-  refreshBtn.addEventListener('mouseenter', () => {
-    cacheStatus.style.display = 'block';
-  });
-  
-  refreshBtn.addEventListener('mouseleave', () => {
-    cacheStatus.style.display = 'none';
-  });
-  
-  // Refresh data function
-  async function refreshAllData() {
-    if (isRefreshing) return;
-    
-    console.log('🔄 [FRONTEND] Starting data refresh...');
-    isRefreshing = true;
-    refreshIcon.textContent = '⏳';
-    refreshText.textContent = 'Refreshing...';
-    refreshBtn.disabled = true;
-    refreshBtn.style.opacity = '0.7';
-    
-    try {
-      console.log('📡 [FRONTEND] Sending perfect refresh request to server...');
-      const response = await fetch('/api/refresh-perfect', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          startDate: '2023-01-01' // Default to 2023, can be made configurable
+
+  let isWorking = false;
+  let jobConsolePollTimer = null;
+
+  function showJobConsole(line) {
+    if (!jobConsoleEl) return;
+    jobConsoleEl.textContent = line || '';
+    jobConsoleEl.style.opacity = '1';
+    jobConsoleEl.style.maxHeight = '48px';
+  }
+
+  function hideJobConsole() {
+    if (!jobConsoleEl) return;
+    jobConsoleEl.style.opacity = '0';
+    jobConsoleEl.style.maxHeight = '0';
+    setTimeout(() => { jobConsoleEl.textContent = ''; }, 300);
+  }
+
+  function startJobConsolePolling() {
+    if (!jobConsoleEl) return;
+    function poll() {
+      if (!jobConsolePollTimer) return;
+      fetch('/api/job-last-log')
+        .then(r => r.json())
+        .then(data => {
+          if (data.line && jobConsoleEl) jobConsoleEl.textContent = data.line;
         })
-      });
-      
-      const result = await response.json();
-      console.log('📊 [FRONTEND] Refresh response received:', result);
-      
-      if (result.success) {
-        refreshIcon.textContent = '✅';
-        refreshText.textContent = 'Refreshed!';
-        
-        console.log(`✅ [FRONTEND] Refresh successful - MEPs: ${result.meps_count}, Speeches: ${result.speeches_count}`);
-        
-        // Update cache status
-        await loadCacheStatus();
-        
-        // Show success message
-        showNotification(`Perfect refresh completed. Reloading data...`, 'success');
-        
-        // Reload the page to show updated data
-        setTimeout(() => {
-          console.log('🔄 [FRONTEND] Reloading page to show updated data...');
-          window.location.reload();
-        }, 2000);
-      } else {
-        throw new Error(result.error || 'Refresh failed');
-      }
-    } catch (error) {
-      console.error('❌ [FRONTEND] Error refreshing data:', error);
-      refreshIcon.textContent = '❌';
-      refreshText.textContent = 'Failed';
-      showNotification('Failed to refresh data: ' + error.message, 'error');
-    } finally {
-      setTimeout(() => {
-        isRefreshing = false;
-        refreshIcon.textContent = '🔄';
-        refreshText.textContent = 'Refresh Data';
-        refreshBtn.disabled = false;
-        refreshBtn.style.opacity = '1';
-      }, 3000);
+        .catch(() => {});
+    }
+    poll();
+    jobConsolePollTimer = setInterval(poll, 1500);
+  }
+
+  function stopJobConsolePolling() {
+    if (jobConsolePollTimer) {
+      clearInterval(jobConsolePollTimer);
+      jobConsolePollTimer = null;
     }
   }
-  
-  // Add click event listener
-  refreshBtn.addEventListener('click', refreshAllData);
-  
-  // Load initial cache status
-  loadCacheStatus();
-  
-  // Show notification function
+
   function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.style.cssText = `
@@ -1404,13 +1555,419 @@ document.addEventListener('DOMContentLoaded', () => {
       word-wrap: break-word;
     `;
     notification.textContent = message;
-    
     document.body.appendChild(notification);
-    
-    setTimeout(() => {
-      notification.remove();
-    }, 5000);
+    setTimeout(() => notification.remove(), 5000);
   }
+
+  async function loadCacheStatus() {
+    try {
+      const response = await fetch('/api/cache-status');
+      const status = await response.json();
+      mepCountSpan.textContent = status.meps_last_updated ? 'Cached' : 'Not cached';
+      speechCountSpan.textContent = status.total_speeches || 0;
+      lastUpdatedSpan.textContent = status.speeches_last_updated ? new Date(status.speeches_last_updated).toLocaleString() : 'Never';
+    } catch (e) {
+      console.error('Error loading cache status:', e);
+    }
+  }
+
+  toggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdown.style.display = dropdown.style.display === 'flex' ? 'none' : 'flex';
+  });
+
+  document.addEventListener('click', () => {
+    dropdown.style.display = 'none';
+  });
+
+  const analyzeBtn = document.getElementById('dataActionAnalyze');
+
+  // Check New Sittings
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      dropdown.style.display = 'none';
+      if (isWorking) return;
+
+      isWorking = true;
+      iconEl.textContent = '...';
+      textEl.textContent = 'Checking...';
+      toggleBtn.disabled = true;
+      showJobConsole('Checking new sittings...');
+      startJobConsolePolling();
+
+      try {
+        const res = await fetch('/api/test-pipeline', { method: 'POST' });
+        const data = await res.json();
+        stopJobConsolePolling();
+        if (data.success) {
+          iconEl.textContent = '';
+          textEl.textContent = 'Done';
+          const msg = data.processed > 0
+            ? `Refreshed: ${data.processed} sittings stored. Languages updated: ${data.language_detection_updated ?? 0}.`
+            : `No new sittings. Languages updated: ${data.language_detection_updated ?? 0}.`;
+          showJobConsole(msg);
+          showNotification(msg, 'success');
+          await loadCacheStatus();
+          setTimeout(() => window.location.reload(), 1500);
+        } else {
+          throw new Error(data.message || data.error || 'Refresh failed');
+        }
+      } catch (err) {
+        stopJobConsolePolling();
+        showJobConsole('Error: ' + err.message);
+        iconEl.textContent = '!';
+        textEl.textContent = 'Failed';
+        showNotification(err.message, 'error');
+      } finally {
+        setTimeout(() => {
+          isWorking = false;
+          iconEl.textContent = '';
+          textEl.textContent = 'Data';
+          toggleBtn.disabled = false;
+          hideJobConsole();
+        }, 3000);
+      }
+    });
+  }
+
+  // Build MEP Dataset — API upsert + link + historic (one per person) + group normalizer
+  if (refreshMepDatasetBtn) {
+    refreshMepDatasetBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      dropdown.style.display = 'none';
+
+      const ok = confirm(
+        'Build MEP Dataset?\n\n' +
+        'This will clear all MEP data and rebuild from the API (term 5 to current), then link speeches and create historic MEPs for remaining speakers. Political groups will be normalized.\n\n' +
+        'This may take a few minutes. Continue?'
+      );
+      if (!ok) return;
+
+      if (isWorking) return;
+      isWorking = true;
+      iconEl.textContent = '...';
+      textEl.textContent = 'Building...';
+      toggleBtn.disabled = true;
+      showJobConsole('Building MEP dataset...');
+      startJobConsolePolling();
+      showNotification('Building MEP dataset (API + historic + group normalization)...', 'info');
+
+      try {
+        const res = await fetch('/api/refresh-mep-dataset', { method: 'POST' });
+        const data = await res.json();
+        stopJobConsolePolling();
+        if (data.success) {
+          iconEl.textContent = '';
+          textEl.textContent = 'Done';
+          const msg = `Done: ${data.apiMeps} API, ${data.createdHistoric} historic, ${data.linkedSpeeches} speeches linked.`;
+          showJobConsole(msg);
+          showNotification(msg, 'success');
+          await loadCacheStatus();
+          setTimeout(() => window.location.reload(), 1500);
+        } else {
+          throw new Error(data.error || 'Build MEP dataset failed');
+        }
+      } catch (err) {
+        stopJobConsolePolling();
+        showJobConsole('Error: ' + err.message);
+        iconEl.textContent = '!';
+        textEl.textContent = 'Failed';
+        showNotification(err.message, 'error');
+      } finally {
+        setTimeout(() => {
+          isWorking = false;
+          iconEl.textContent = '';
+          textEl.textContent = 'Data';
+          toggleBtn.disabled = false;
+          hideJobConsole();
+        }, 3000);
+      }
+    });
+  }
+
+  // Analyze / Generate Analytics Database (with warning)
+  if (analyzeBtn) {
+    analyzeBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      dropdown.style.display = 'none';
+
+      const ok = confirm(
+        '⚠️ Generate Analytics Database?\n\n' +
+        'This will overwrite the existing analytics database with fresh calculations.\n\n' +
+        'This process may take 1-5 minutes depending on your data size.\n\n' +
+        'Continue?'
+      );
+      if (!ok) return;
+
+      if (isWorking) return;
+      isWorking = true;
+      iconEl.textContent = '...';
+      textEl.textContent = 'Analyzing...';
+      toggleBtn.disabled = true;
+      showJobConsole('Generating analytics database...');
+      startJobConsolePolling();
+      showNotification('Generating analytics database... This may take a few minutes.', 'info');
+
+      try {
+        const res = await fetch('/api/generate-analytics', { method: 'POST' });
+        const data = await res.json();
+        stopJobConsolePolling();
+        if (data.success) {
+          iconEl.textContent = '';
+          textEl.textContent = 'Done';
+          showJobConsole('Analytics database generated. Duration: ' + (data.duration || 'N/A'));
+          showNotification(`Analytics database generated successfully! Duration: ${data.duration || 'N/A'}`, 'success');
+          if (document.querySelector('.tab[data-tab="analytics"].active')) {
+            setTimeout(() => window.location.reload(), 2000);
+          }
+        } else {
+          throw new Error(data.error || 'Analytics generation failed');
+        }
+      } catch (err) {
+        stopJobConsolePolling();
+        showJobConsole('Error: ' + err.message);
+        iconEl.textContent = '!';
+        textEl.textContent = 'Failed';
+        showNotification(err.message, 'error');
+      } finally {
+        setTimeout(() => {
+          isWorking = false;
+          iconEl.textContent = '';
+          textEl.textContent = 'Data';
+          toggleBtn.disabled = false;
+          hideJobConsole();
+        }, 3000);
+      }
+    });
+  }
+
+  // Refresh Languages — re-run language detection on all speeches
+  if (refreshLanguagesBtn) {
+    refreshLanguagesBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      dropdown.style.display = 'none';
+
+      const ok = confirm(
+        'Refresh Languages?\n\n' +
+        'This will re-detect and overwrite the language for every speech in the database.\n\n' +
+        'Use this if you updated the language detection script or want to fix incorrect languages.\n\n' +
+        'Continue?'
+      );
+      if (!ok) return;
+
+      if (isWorking) return;
+      isWorking = true;
+      iconEl.textContent = '...';
+      textEl.textContent = 'Detecting...';
+      toggleBtn.disabled = true;
+      showJobConsole('Refreshing languages for all speeches...');
+      startJobConsolePolling();
+      showNotification('Refreshing languages for all speeches...', 'info');
+
+      try {
+        const res = await fetch('/api/refresh-languages', { method: 'POST' });
+        const data = await res.json();
+        stopJobConsolePolling();
+        if (data.success) {
+          iconEl.textContent = '';
+          textEl.textContent = 'Done';
+          showJobConsole(`Done: ${data.updated} updated (${data.total} total).`);
+          showNotification(
+            `Languages refreshed: ${data.updated} updated (${data.total} total)`,
+            'success'
+          );
+          await loadCacheStatus();
+          setTimeout(() => window.location.reload(), 1500);
+        } else {
+          throw new Error(data.error || 'Refresh languages failed');
+        }
+      } catch (err) {
+        stopJobConsolePolling();
+        showJobConsole('Error: ' + err.message);
+        iconEl.textContent = '!';
+        textEl.textContent = 'Failed';
+        showNotification(err.message, 'error');
+      } finally {
+        setTimeout(() => {
+          isWorking = false;
+          iconEl.textContent = '';
+          textEl.textContent = 'Data';
+          toggleBtn.disabled = false;
+          hideJobConsole();
+        }, 3000);
+      }
+    });
+  }
+
+  // Normalize Macro Topics — AI suggests rules, then apply to DB
+  if (normalizeTopicsBtn) {
+    normalizeTopicsBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      dropdown.style.display = 'none';
+
+      const ok = confirm(
+        'Normalize Macro Topics?\n\n' +
+        'This will use AI to group similar macro topics (e.g. "Foreign Policy Cuba" and "foreign policy central america") ' +
+        'and update the database to use one label per group. Requires OPENAI_API_KEY.\n\n' +
+        'Continue?'
+      );
+      if (!ok) return;
+
+      if (isWorking) return;
+      isWorking = true;
+      iconEl.textContent = '...';
+      textEl.textContent = 'Normalizing...';
+      toggleBtn.disabled = true;
+      showJobConsole('Normalizing macro topics...');
+      startJobConsolePolling();
+      showNotification('Normalizing macro topics (AI + applying rules)...', 'info');
+
+      try {
+        const res = await fetch('/api/normalize-macro-topics', { method: 'POST' });
+        const data = await res.json();
+        stopJobConsolePolling();
+        if (data.success) {
+          iconEl.textContent = '';
+          textEl.textContent = 'Done';
+          const msg = data.updated > 0 ? `${data.rules} rule(s), ${data.updated} speeches updated.` : (data.message || 'Done.');
+          showJobConsole(msg);
+          showNotification(
+            data.updated > 0
+              ? `Normalized: ${data.rules} rule(s), ${data.updated} speeches updated.`
+              : `Normalized: ${data.rules} rule(s). ${data.message || ''}`,
+            'success'
+          );
+          await loadCacheStatus();
+          setTimeout(() => window.location.reload(), 1500);
+        } else {
+          throw new Error(data.error || 'Normalize macro topics failed');
+        }
+      } catch (err) {
+        stopJobConsolePolling();
+        showJobConsole('Error: ' + err.message);
+        iconEl.textContent = '!';
+        textEl.textContent = 'Failed';
+        showNotification(err.message, 'error');
+      } finally {
+        setTimeout(() => {
+          isWorking = false;
+          iconEl.textContent = '';
+          textEl.textContent = 'Data';
+          toggleBtn.disabled = false;
+          hideJobConsole();
+        }, 3000);
+      }
+    });
+  }
+
+  // Normalize Parties — run political group normalizer on speeches (political_group_std)
+  if (normalizePartiesBtn) {
+    normalizePartiesBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      dropdown.style.display = 'none';
+
+      const ok = confirm(
+        'Normalize Parties?\n\n' +
+        'This will run the political group normalizer on all speeches: raw party/affiliation text will be mapped to canonical groups (PPE, S&D, Renew, etc.). ' +
+        'MEP Role/Affiliation on the All MEPs page will then show fewer "Unknown" entries where speeches have a recognizable group.\n\nContinue?'
+      );
+      if (!ok) return;
+
+      if (isWorking) return;
+      isWorking = true;
+      iconEl.textContent = '...';
+      textEl.textContent = 'Normalizing...';
+      toggleBtn.disabled = true;
+      showJobConsole('Normalizing parties (political groups)...');
+      startJobConsolePolling();
+      showNotification('Normalizing political groups...', 'info');
+
+      try {
+        const res = await fetch('/api/normalize-parties', { method: 'POST' });
+        const data = await res.json();
+        stopJobConsolePolling();
+        if (data.success) {
+          iconEl.textContent = '';
+          textEl.textContent = 'Done';
+          showJobConsole(data.message || 'Parties normalized.');
+          showNotification('Political groups normalized.', 'success');
+          await loadCacheStatus();
+          setTimeout(() => window.location.reload(), 1500);
+        } else {
+          throw new Error(data.error || 'Normalize parties failed');
+        }
+      } catch (err) {
+        stopJobConsolePolling();
+        showJobConsole('Error: ' + err.message);
+        iconEl.textContent = '!';
+        textEl.textContent = 'Failed';
+        showNotification(err.message, 'error');
+      } finally {
+        setTimeout(() => {
+          isWorking = false;
+          iconEl.textContent = '';
+          textEl.textContent = 'Data';
+          toggleBtn.disabled = false;
+          hideJobConsole();
+        }, 3000);
+      }
+    });
+  }
+
+  // Rebuild Database (with confirmation)
+  if (rebuildBtn) {
+    rebuildBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      dropdown.style.display = 'none';
+
+      const ok = confirm(
+        'Rebuild the entire database?\n\n' +
+        'This will clear all sittings and rebuild from 1999. It can take many hours. Are you sure?'
+      );
+      if (!ok) return;
+
+      if (isWorking) return;
+      isWorking = true;
+      iconEl.textContent = '...';
+      textEl.textContent = 'Rebuilding...';
+      toggleBtn.disabled = true;
+      showJobConsole('Rebuilding database (sittings + speeches from 1999)...');
+      startJobConsolePolling();
+
+      try {
+        const res = await fetch('/api/rebuild-database', { method: 'POST' });
+        const data = await res.json();
+        stopJobConsolePolling();
+        if (data.success) {
+          iconEl.textContent = '';
+          textEl.textContent = 'Done';
+          showJobConsole('Done: ' + (data.processed || 0) + ' sittings stored.');
+          showNotification(`Rebuilt: ${data.processed || 0} sittings stored`, 'success');
+          await loadCacheStatus();
+          setTimeout(() => window.location.reload(), 2000);
+        } else {
+          throw new Error(data.error || 'Rebuild failed');
+        }
+      } catch (err) {
+        stopJobConsolePolling();
+        showJobConsole('Error: ' + err.message);
+        iconEl.textContent = '!';
+        textEl.textContent = 'Failed';
+        showNotification(err.message, 'error');
+      } finally {
+        setTimeout(() => {
+          isWorking = false;
+          iconEl.textContent = '';
+          textEl.textContent = 'Data';
+          toggleBtn.disabled = false;
+          hideJobConsole();
+        }, 3000);
+      }
+    });
+  }
+
+  loadCacheStatus();
 })();
 
 // --- Export Functionality ---
@@ -1541,33 +2098,33 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         clearDebugLog();
         const startTime = Date.now();
-        addDebugLog('🔍 Preview request started', 'info');
+        addDebugLog('Preview request started', 'info');
         
         exportStatus.textContent = 'Loading count...';
         exportStatus.style.color = '#3b82f6';
         
         const timeParams = getTimeFrameParams();
-        addDebugLog(`⏰ Time frame: ${JSON.stringify(timeParams)}`, 'info');
+        addDebugLog(`Time frame: ${JSON.stringify(timeParams)}`, 'info');
         
         const queryParams = new URLSearchParams({
           ...timeParams,
           countOnly: 'true'
         });
         
-        addDebugLog(`📡 Sending request to /api/export/speeches`, 'info');
+        addDebugLog('Sending request to /api/export/speeches', 'info');
         const fetchStart = Date.now();
         
         const response = await fetch(`/api/export/speeches?${queryParams.toString()}`);
         
         const fetchTime = Date.now() - fetchStart;
-        addDebugLog(`✅ Response received in ${fetchTime}ms`, 'success');
+        addDebugLog(`Response received in ${fetchTime}ms`, 'success');
         
         const data = await response.json();
         
         if (data.count !== undefined) {
           const totalTime = Date.now() - startTime;
-          addDebugLog(`📊 Found ${data.count.toLocaleString()} speeches`, 'success');
-          addDebugLog(`⏱️ Total preview time: ${totalTime}ms`, 'success');
+          addDebugLog(`Found ${data.count.toLocaleString()} speeches`, 'success');
+          addDebugLog(`Total preview time: ${totalTime}ms`, 'success');
           
           exportCount.textContent = data.count.toLocaleString();
           exportStats.style.display = 'block';
@@ -1578,7 +2135,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } catch (error) {
         console.error('Error previewing export:', error);
-        addDebugLog(`❌ Error: ${error.message}`, 'error');
+        addDebugLog(`Error: ${error.message}`, 'error');
         exportStatus.textContent = '❌ Error loading preview';
         exportStatus.style.color = '#ef4444';
       }
@@ -1591,15 +2148,15 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         clearDebugLog();
         const totalStartTime = Date.now();
-        addDebugLog('📥 Export request started', 'info');
+        addDebugLog('Export request started', 'info');
         
         const selectedFields = getSelectedFields();
-        addDebugLog(`📋 Selected ${selectedFields.length} fields: ${selectedFields.join(', ')}`, 'info');
+        addDebugLog(`Selected ${selectedFields.length} fields: ${selectedFields.join(', ')}`, 'info');
         
         if (selectedFields.length === 0) {
           exportStatus.textContent = '⚠️ Please select at least one field';
           exportStatus.style.color = '#f59e0b';
-          addDebugLog('⚠️ No fields selected', 'error');
+          addDebugLog('No fields selected', 'error');
           return;
         }
         
@@ -1611,58 +2168,58 @@ document.addEventListener('DOMContentLoaded', () => {
         exportProgressMessage.textContent = 'Fetching data from server...';
         
         const timeParams = getTimeFrameParams();
-        addDebugLog(`⏰ Time frame params: ${JSON.stringify(timeParams)}`, 'info');
+        addDebugLog(`Time frame params: ${JSON.stringify(timeParams)}`, 'info');
         
         const queryParams = new URLSearchParams({
           ...timeParams,
           fields: selectedFields.join(',')
         });
         
-        addDebugLog(`📡 Building request URL...`, 'info');
+        addDebugLog('Building request URL...', 'info');
         const requestUrl = `/api/export/speeches?${queryParams.toString()}`;
-        addDebugLog(`🔗 Request URL: ${requestUrl}`, 'info');
+        addDebugLog(`Request URL: ${requestUrl}`, 'info');
         
         exportProgressBar.style.width = '30%';
         exportProgressPercent.textContent = '30%';
         exportProgressMessage.textContent = 'Downloading data...';
         
-        addDebugLog(`🌐 Sending fetch request to server...`, 'info');
+        addDebugLog('Sending fetch request to server...', 'info');
         const fetchStart = Date.now();
         
         const response = await fetch(requestUrl);
         
         const fetchTime = Date.now() - fetchStart;
-        addDebugLog(`✅ Server response received in ${fetchTime}ms (${(fetchTime/1000).toFixed(2)}s)`, 'success');
+        addDebugLog(`Server response received in ${fetchTime}ms (${(fetchTime/1000).toFixed(2)}s)`, 'success');
         
         if (!response.ok) {
-          addDebugLog(`❌ Server returned error: ${response.status} ${response.statusText}`, 'error');
+          addDebugLog(`Server returned error: ${response.status} ${response.statusText}`, 'error');
           throw new Error('Export failed: ' + response.statusText);
         }
         
         const contentLength = response.headers.get('content-length');
         if (contentLength) {
           const sizeMB = (parseInt(contentLength) / 1024 / 1024).toFixed(2);
-          addDebugLog(`📦 Response size: ${sizeMB} MB`, 'info');
+          addDebugLog(`Response size: ${sizeMB} MB`, 'info');
         }
         
         exportProgressBar.style.width = '60%';
         exportProgressPercent.textContent = '60%';
         exportProgressMessage.textContent = 'Processing CSV...';
         
-        addDebugLog(`💾 Converting response to blob...`, 'info');
+        addDebugLog('Converting response to blob...', 'info');
         const blobStart = Date.now();
         
         const blob = await response.blob();
         
         const blobTime = Date.now() - blobStart;
         const blobSizeMB = (blob.size / 1024 / 1024).toFixed(2);
-        addDebugLog(`✅ Blob created in ${blobTime}ms - Size: ${blobSizeMB} MB`, 'success');
+        addDebugLog(`Blob created in ${blobTime}ms - Size: ${blobSizeMB} MB`, 'success');
         
         exportProgressBar.style.width = '90%';
         exportProgressPercent.textContent = '90%';
         exportProgressMessage.textContent = 'Preparing download...';
         
-        addDebugLog(`🔗 Creating download link...`, 'info');
+        addDebugLog('Creating download link...', 'info');
         // Create download link
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1674,7 +2231,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const filename = `eu_speeches_${timeFrame}_${timestamp}.csv`;
         a.download = filename;
         
-        addDebugLog(`📁 Filename: ${filename}`, 'info');
+        addDebugLog(`Filename: ${filename}`, 'info');
         
         document.body.appendChild(a);
         a.click();
@@ -1686,8 +2243,8 @@ document.addEventListener('DOMContentLoaded', () => {
         exportProgressMessage.textContent = 'Export complete!';
         
         const totalTime = Date.now() - totalStartTime;
-        addDebugLog(`✅ Export completed successfully!`, 'success');
-        addDebugLog(`⏱️ Total export time: ${totalTime}ms (${(totalTime/1000).toFixed(2)}s)`, 'success');
+        addDebugLog('Export completed successfully!', 'success');
+        addDebugLog(`Total export time: ${totalTime}ms (${(totalTime/1000).toFixed(2)}s)`, 'success');
         
         exportStatus.textContent = '✅ Export completed';
         exportStatus.style.color = '#10b981';
@@ -1700,8 +2257,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
       } catch (error) {
         console.error('Error exporting to CSV:', error);
-        addDebugLog(`❌ Export failed: ${error.message}`, 'error');
-        addDebugLog(`📚 Stack trace: ${error.stack}`, 'error');
+        addDebugLog(`Export failed: ${error.message}`, 'error');
+        addDebugLog(`Stack trace: ${error.stack}`, 'error');
         exportStatus.textContent = '❌ Export failed: ' + error.message;
         exportStatus.style.color = '#ef4444';
         exportProgress.style.display = 'none';
@@ -1823,7 +2380,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update every 2 seconds
     memoryInterval = setInterval(updateMemoryDisplay, 2000);
     
-    console.log('🧠 Memory monitoring started');
+    console.log('Memory monitoring started');
   }
   
   // Stop monitoring
@@ -1839,7 +2396,7 @@ document.addEventListener('DOMContentLoaded', () => {
       memoryInterval = null;
     }
     
-    console.log('🧠 Memory monitoring stopped');
+    console.log('Memory monitoring stopped');
   }
   
   // Event listeners
@@ -1857,7 +2414,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const heapPercent = (mem.usedJSHeapSize / mem.jsHeapSizeLimit) * 100;
     
     if (heapPercent > 50) {
-      console.log('🧠 High memory usage detected, auto-starting monitor');
+      console.log('High memory usage detected, auto-starting monitor');
       setTimeout(startMonitoring, 1000);
     }
   }

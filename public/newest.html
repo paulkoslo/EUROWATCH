@@ -9,6 +9,17 @@
 <body>
   <h1>Newest Speeches</h1>
   <p><a href="index.html">← Back to Dashboard</a></p>
+  <form id="dateFilterForm">
+    <label>From <input type="date" id="startDate"></label>
+    <label>To <input type="date" id="endDate"></label>
+    <button type="submit">Filter</button>
+    <button type="button" id="clearFilter">Clear</button>
+  </form>
+  <p id="sittingsCountStatus">Loading…</p>
+  <div id="speechesLoadingBarContainer" style="display:none">
+    <div id="speechesLoadingBar" style="width:0%;height:4px;background:#4a9"></div>
+    <span id="speechesLoadingPercent">0%</span>
+  </div>
   <div class="table-container">
     <table id="newestSpeechesTable">
       <thead>
@@ -22,6 +33,7 @@
       <tbody></tbody>
     </table>
   </div>
+  <button id="loadMoreSittingsBtn" style="display:none;margin-top:1em">Load more</button>
   <script src="newest.js"></script>
 </body>
 </html>
