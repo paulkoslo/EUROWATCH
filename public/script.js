@@ -42,9 +42,9 @@ async function fetchPreview(date) {
       // Activate the clicked tab and its content
       tab.classList.add('active');
       document.getElementById(tab.dataset.tab).classList.add('active');
-      // If switching to speeches tab, load speeches for selected MEP
+      // If switching to speeches tab, trigger sittings load (Parliament Sittings from newest.js)
       if (tab.dataset.tab === 'speeches') {
-        loadSpeeches(mepSelect.value, true);
+        if (typeof window.loadSittings === 'function') window.loadSittings(true);
       }
       // If switching to analytics tab: warm cache if needed, then load
       if (tab.dataset.tab === 'analytics') {
@@ -440,10 +440,10 @@ async function fetchPreview(date) {
     });
   });
 
-  // --- Initial load of speeches if speeches tab is active on page load ---
+  // --- Initial load: if speeches tab is active on page load, trigger sittings load ---
   tabs.forEach(tab => {
     if (tab.dataset.tab === 'speeches' && tab.classList.contains('active')) {
-      loadSpeeches(mepSelect.value, true);
+      if (typeof window.loadSittings === 'function') window.loadSittings(true);
     }
     if (tab.dataset.tab === 'analytics' && tab.classList.contains('active')) {
       checkCacheStatusOnce().then(status => {

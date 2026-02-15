@@ -1,4 +1,4 @@
-const SITTINGS_LIMIT = 100000;
+const SITTINGS_LIMIT = 500;
 
 async function fetchPreview(date) {
   try {
@@ -14,29 +14,44 @@ async function fetchPreview(date) {
 // State for all speeches and current sort order
 let allSpeeches = [];
 let totalSittings = 0;
+let sittingsOffset = 0;
 let currentSort = { column: 'date', direction: 'desc' };
 let dateFilter = { start: null, end: null };
+let isLoadingMore = false;
 
-// Fetch all sitting dates (metadata only — content loaded when opening a sitting)
-async function loadSittings() {
+// Fetch sitting dates (metadata only — content loaded when opening a sitting). Set reset=true for initial/filtered load, false for "Load more"
+async function loadSittings(reset = true) {
+  if (isLoadingMore) return false;
+  isLoadingMore = true;
+
   try {
     const barContainer = document.getElementById('speechesLoadingBarContainer');
     const bar = document.getElementById('speechesLoadingBar');
     const percentSpan = document.getElementById('speechesLoadingPercent');
-    if (barContainer) barContainer.style.display = '';
-    if (bar) bar.style.width = '50%';
-    if (percentSpan) percentSpan.textContent = '50%';
+    if (reset) {
+      sittingsOffset = 0;
+      if (barContainer) barContainer.style.display = '';
+      if (bar) bar.style.width = '50%';
+      if (percentSpan) percentSpan.textContent = '50%';
+    }
 
     const params = new URLSearchParams();
     params.set('limit', String(SITTINGS_LIMIT));
+    params.set('offset', String(sittingsOffset));
     if (dateFilter.start) params.set('startDate', dateFilter.start);
     if (dateFilter.end) params.set('endDate', dateFilter.end);
 
     const response = await fetch(`/api/speeches?${params.toString()}`);
     const json = await response.json();
 
-    allSpeeches = json.data || [];
+    const newData = json.data || [];
+    if (reset) {
+      allSpeeches = newData;
+    } else {
+      allSpeeches = allSpeeches.concat(newData);
+    }
     totalSittings = (json.meta && json.meta.total) || allSpeeches.length;
+    sittingsOffset = allSpeeches.length;
 
     if (bar) bar.style.width = '100%';
     if (percentSpan) percentSpan.textContent = '100%';
@@ -44,11 +59,13 @@ async function loadSittings() {
 
     console.log(`✅ [FRONTEND] Loaded ${allSpeeches.length} sitting dates (content loads on open)`);
     renderTable();
-    updateSittingsStatus();
     return true;
   } catch (err) {
     console.error('❌ [FRONTEND] Error loading sittings:', err);
     return false;
+  } finally {
+    isLoadingMore = false;
+    updateSittingsStatus();
   }
 }
 
@@ -106,8 +123,12 @@ function renderTable() {
 function updateSittingsStatus() {
   const status = document.getElementById('sittingsCountStatus');
   const btn = document.getElementById('loadMoreSittingsBtn');
-  if (status) status.textContent = `${allSpeeches.length} sittings (content loads when you open one)`;
-  if (btn) btn.style.display = 'none';
+  if (status) status.textContent = `${allSpeeches.length} of ${totalSittings} sittings (content loads when you open one)`;
+  if (btn) {
+    btn.style.display = allSpeeches.length < totalSittings ? 'block' : 'none';
+    btn.disabled = isLoadingMore;
+    btn.textContent = isLoadingMore ? 'Loading…' : 'Load more';
+  }
 }
 
 // Setup date filter form — fetches from API with server-side date filter
@@ -120,20 +141,28 @@ function setupDateFilter() {
     e.preventDefault();
     dateFilter.start = document.getElementById('startDate').value || null;
     dateFilter.end = document.getElementById('endDate').value || null;
-    loadSittings();
+    loadSittings(true);
   });
   
   clearBtn.addEventListener('click', () => {
     document.getElementById('startDate').value = '';
     document.getElementById('endDate').value = '';
     dateFilter = { start: null, end: null };
-    loadSittings();
+    loadSittings(true);
   });
 }
 
+// Expose for tab switch (script.js calls this when switching to Speeches tab)
+window.loadSittings = loadSittings;
+
 document.addEventListener('DOMContentLoaded', () => {
-  loadSittings();
+  loadSittings(true);
   setupDateFilter();
+
+  const loadMoreBtn = document.getElementById('loadMoreSittingsBtn');
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener('click', () => loadSittings(false));
+  }
   
   const th = document.querySelector('#newestSpeechesTable th.sortable[data-col="date"]');
   if (th) {

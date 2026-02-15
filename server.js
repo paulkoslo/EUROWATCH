@@ -14,6 +14,18 @@ const requireLocalRun = (req, res, next) => {
   next();
 };
 
+/** In-memory cache for heavy API responses (reduces DB load, ~3 min TTL) */
+const apiCache = new Map();
+const API_CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
+function getApiCache(key) {
+  const entry = apiCache.get(key);
+  if (!entry || Date.now() > entry.expires) return null;
+  return entry.data;
+}
+function setApiCache(key, data) {
+  apiCache.set(key, { data, expires: Date.now() + API_CACHE_TTL_MS });
+}
+
 // Initialize SQLite database
 const { DB_PATH } = require('./src/core/db');
 const db = new sqlite3.Database(DB_PATH);
@@ -57,6 +69,11 @@ if (handleCli(db)) return;
 
     // GET /api/meps: return all MEPs from DB with speech counts
     app.get('/api/meps', (req, res) => {
+      const cached = getApiCache('meps');
+      if (cached) {
+        res.setHeader('Cache-Control', 'no-store');
+        return res.json(cached);
+      }
       res.setHeader('Cache-Control', 'no-store');
       console.log('[CACHE] Fetching MEPs from database with speech counts...');
       db.all(`
@@ -156,7 +173,9 @@ if (handleCli(db)) return;
             });
           }
 
-          res.json({ data });
+          const payload = { data };
+          setApiCache('meps', payload);
+          res.json(payload);
         });
       });
     });
@@ -311,8 +330,14 @@ if (handleCli(db)) return;
         const startDate = req.query.startDate;
         const endDate = req.query.endDate;
         const rawLimit = parseInt(req.query.limit, 10);
-        const limit = mepId ? (rawLimit || 50) : (rawLimit || 100000);
+        const limit = mepId ? (rawLimit || 50) : (rawLimit || 500);
         const offset = parseInt(req.query.offset, 10) || 0;
+
+      const cacheKey = `speeches:${mepId || ''}:${limit}:${offset}:${startDate || ''}:${endDate || ''}`;
+      const cached = getApiCache(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
       
       console.log(`[CACHE] Fetching speeches - MEP ID: ${mepId || 'all'}, limit: ${limit}, offset: ${offset}${startDate ? `, startDate: ${startDate}` : ''}${endDate ? `, endDate: ${endDate}` : ''}`);
       
@@ -386,8 +411,10 @@ if (handleCli(db)) return;
             docIdentifier: row.docIdentifier,
             notationId: row.notationId
           }));
-          
-        res.json({ data, meta: { total } });
+
+          const payload = { data, meta: { total } };
+          setApiCache(cacheKey, payload);
+        res.json(payload);
         });
       });
     });
