@@ -41,13 +41,16 @@ let lastJobLogLine = '';
 
 if (handleCli(db)) return;
 
-// Start server after database init
+// Start server immediately; run init in background so Render sees an open port quickly
 (async () => {
   try {
     await new Promise((resolve, reject) => {
       db.run('PRAGMA busy_timeout = 15000', (err) => (err ? reject(err) : resolve()));
     });
-    await initDatabase(db);
+    // Run init in background—do not block app.listen (avoids Render port-scan timeout)
+    initDatabase(db)
+      .then(() => console.log('[INIT] Database init complete'))
+      .catch((err) => console.error('[INIT] Init failed:', err));
 
     // Serve static assets (static site files located in public directory)
     app.use(express.static(path.join(__dirname, 'public')));

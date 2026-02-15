@@ -2,6 +2,10 @@
 node_modules/
 package-lock.json
 
+# SSH keys (never commit private keys)
+eurowatchtool
+eurowatchtool.pub
+
 # Environment variables
 .env
 .env.local
