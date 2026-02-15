@@ -2,8 +2,9 @@
 /**
  * Build Demo Data
  *
- * Creates data/demo-data/ with a copy of ep_data.db containing only sittings
- * from 2020 onwards. Use for lighter demo or testing (e.g. Render).
+ * Creates data/demo-data/ with a copy of ep_data.db containing:
+ * - Sittings from 2020 onwards
+ * - Only MEPs from the most recent 2 terms (9 and 10, i.e. speakers in our data)
  *
  * Usage:
  *   node src/scripts/build-demo-data.js           # Ep data only
@@ -43,7 +44,14 @@ function get(db, sql, params = []) {
 
 async function main() {
   const withAnalytics = process.argv.includes('--analytics');
-  console.log('Building demo data (sittings from 2020 onwards)...');
+  const skipIfExists = process.env.DEMO_SKIP_IF_EXISTS === '1' || process.env.DEMO_SKIP_IF_EXISTS === 'true';
+
+  if (skipIfExists && fs.existsSync(DEMO_DB) && (!withAnalytics || fs.existsSync(DEMO_ANALYTICS))) {
+    console.log('Demo data already exists, skipping (DEMO_SKIP_IF_EXISTS=1).');
+    return;
+  }
+
+  console.log('Building demo data (sittings from 2020 onwards, MEPs from most recent 2 terms)...');
   console.log('Source:', DB_PATH);
 
   if (!fs.existsSync(DB_PATH)) {
@@ -90,6 +98,22 @@ async function main() {
     await run(demoDb, `DELETE FROM sittings WHERE activity_date < ? OR activity_date IS NULL`, [CUTOFF]);
     const delSittings = beforeSittings.n - (await get(demoDb, 'SELECT COUNT(*) as n FROM sittings')).n;
 
+    const beforeMeps = await get(demoDb, 'SELECT COUNT(*) as n FROM meps');
+    await run(demoDb, `DELETE FROM meps WHERE id NOT IN (
+      SELECT DISTINCT m.id FROM meps m
+      WHERE m.id IN (SELECT mep_id FROM individual_speeches WHERE mep_id IS NOT NULL)
+      OR EXISTS (
+        SELECT 1 FROM individual_speeches s
+        WHERE s.speaker_name IS NOT NULL
+        AND (LOWER(TRIM(s.speaker_name)) = LOWER(TRIM(m.label))
+             OR LOWER(TRIM(s.speaker_name)) = LOWER(TRIM(COALESCE(m.givenName,'') || ' ' || COALESCE(m.familyName,'')))
+             OR LOWER(TRIM(s.speaker_name)) = LOWER(TRIM(COALESCE(m.familyName,'') || ' ' || COALESCE(m.givenName,'')))
+        )
+      )
+    )`);
+    const afterMeps = await get(demoDb, 'SELECT COUNT(*) as n FROM meps');
+    const delMeps = beforeMeps.n - afterMeps.n;
+
     await run(demoDb, 'DELETE FROM speeches');
     await run(demoDb, `INSERT OR REPLACE INTO speeches (id, type, label, activity_date, content, last_updated)
       SELECT id, type, label, activity_date, content, last_updated FROM sittings WHERE id IS NOT NULL`);
@@ -103,8 +127,8 @@ async function main() {
     const afterSittings = await get(demoDb, 'SELECT COUNT(*) as n FROM sittings');
     const afterSpeeches = await get(demoDb, 'SELECT COUNT(*) as n FROM individual_speeches');
 
-    console.log('Removed', delSittings, 'sittings and', delSpeeches, 'individual speeches');
-    console.log('Demo DB now has', afterSittings.n, 'sittings and', afterSpeeches.n, 'individual speeches');
+    console.log('Removed', delSittings, 'sittings,', delSpeeches, 'individual speeches, and', delMeps, 'MEPs');
+    console.log('Demo DB now has', afterSittings.n, 'sittings,', afterSpeeches.n, 'individual speeches, and', afterMeps.n, 'MEPs');
   } finally {
     demoDb.close();
   }
