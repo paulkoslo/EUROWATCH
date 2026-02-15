@@ -9,7 +9,7 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const { DB_PATH } = require('./db');
 
-const ANALYTICS_DB_PATH = path.join(__dirname, '..', '..', 'data', 'analytics.db');
+const ANALYTICS_DB_PATH = process.env.ANALYTICS_DB_PATH || path.join(__dirname, '..', '..', 'data', 'analytics.db');
 
 /**
  * Initialize the analytics database schema

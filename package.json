@@ -11,7 +11,9 @@
     "step3": "node src/scripts/step-3-parse-sitting.js",
     "step4": "node src/scripts/step-4-classify-topics.js",
     "step5": "node src/scripts/step-5-store-sitting.js",
-    "bulk": "node src/pipeline/index.js --full"
+    "bulk": "node src/pipeline/index.js --full",
+    "demo-data": "node src/scripts/build-demo-data.js",
+    "demo-data:full": "node src/scripts/build-demo-data.js --analytics"
   },
   "dependencies": {
     "axios": "^0.27.2",
