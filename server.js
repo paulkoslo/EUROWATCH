@@ -47,6 +47,7 @@ const { runRefreshMepDataset, runGroupNormalizer } = require('./src/server/refre
 const { syncMepAffiliationsFromSpeeches } = require('./src/server/sync-mep-affiliations');
 const { initDatabase } = require('./src/server/init-db');
 const { handleCli } = require('./src/server/cli');
+const { chatCompletion } = require('./src/server/openai-chat');
 
 /** Last log line from running Data jobs (polled by frontend console panel) */
 let lastJobLogLine = '';
@@ -437,6 +438,28 @@ if (handleCli(db)) return;
           count: rows.length 
         });
       });
+    });
+
+    // POST /api/ai/chat: OpenAI chat completion endpoint
+    // Increase body size limit to handle large speech content (50MB limit)
+    app.post('/api/ai/chat', express.json({ limit: '50mb' }), async (req, res) => {
+      try {
+        const { messages, model, temperature } = req.body;
+        
+        // Validate messages array
+        if (!messages || !Array.isArray(messages) || messages.length === 0) {
+          return res.status(400).json({ error: 'Messages array is required' });
+        }
+        
+        const result = await chatCompletion(messages, { model, temperature });
+        res.json(result);
+      } catch (error) {
+        console.error('[AI/CHAT] Error:', error.message);
+        const statusCode = error.message.includes('not set') ? 500 : 400;
+        res.status(statusCode).json({
+          error: error.message || 'Failed to get AI response'
+        });
+      }
     });
 
     // GET /api/speeches/:id: return detailed speech info from database

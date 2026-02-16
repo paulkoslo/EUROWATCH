@@ -421,10 +421,11 @@ select:focus {
   align-items: flex-start;
   flex-wrap: wrap;
   margin-bottom: 2.5rem;
+  justify-content: space-between;
 }
 
 #speechMetaBox, #fullSpeechApi {
-  flex: 1 1 320px;
+  flex: 0 1 auto;
   min-width: 260px;
   max-width: 420px;
 }
@@ -433,6 +434,51 @@ select:focus {
   color: var(--eu-blue);
   margin-top: 0;
   margin-bottom: 1rem;
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+#speakersSection {
+  flex: 0 1 auto;
+  min-width: 260px;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+#speakersSection h3 {
+  color: var(--eu-blue);
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.25em;
+  font-weight: 600;
+  width: 100%;
+  text-align: right;
+}
+
+#speakersList {
+  width: 100%;
+  text-align: right;
+}
+
+#speakersList > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+#speakersList a,
+#speakersList span {
+  text-align: right;
+  display: block;
+}
+
+#viewAllSpeakersLink {
+  text-align: right;
+  display: block;
+  margin-top: 0.5rem;
 }
 
 #speechMetaBox p, #fullSpeechApi p {

@@ -41,175 +41,6 @@ async function fetchSpeechContent(speechId) {
   }
 }
 
-async function splitIntoChunks(content, maxChunkSize = 10000) {
-  const chunks = [];
-  let currentChunk = '';
-  const sentences = content.split(/(?<=[.!?])\s+/);
-  
-  for (const sentence of sentences) {
-    if ((currentChunk + sentence).length > maxChunkSize) {
-      if (currentChunk) {
-        chunks.push(currentChunk.trim());
-        currentChunk = '';
-      }
-      // If a single sentence is longer than maxChunkSize, split it by words
-      if (sentence.length > maxChunkSize) {
-        const words = sentence.split(/\s+/);
-        let tempChunk = '';
-        for (const word of words) {
-          if ((tempChunk + word).length > maxChunkSize) {
-            chunks.push(tempChunk.trim());
-            tempChunk = word;
-          } else {
-            tempChunk += (tempChunk ? ' ' : '') + word;
-          }
-        }
-        if (tempChunk) {
-          currentChunk = tempChunk;
-        }
-      } else {
-        currentChunk = sentence;
-      }
-    } else {
-      currentChunk += (currentChunk ? ' ' : '') + sentence;
-    }
-  }
-  
-  if (currentChunk) {
-    chunks.push(currentChunk.trim());
-  }
-  
-  return chunks;
-}
-
-async function generateChunkSummary(chunk, chunkNumber, totalChunks) {
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer YOUR_API_KEY_HERE'
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a helpful assistant that summarizes parliamentary speeches. Create a concise bullet-point summary of the key points from this section of the speech.'
-          },
-          {
-            role: 'user',
-            content: `This is part ${chunkNumber} of ${totalChunks} of a parliamentary speech. Please provide a bullet-point summary of the key points from this section:\n\n${chunk}`
-          }
-        ],
-        temperature: 0.3
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`OpenAI API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
-    }
-
-    const data = await response.json();
-    return data.choices[0].message.content;
-  } catch (error) {
-    console.error(`Error generating summary for chunk ${chunkNumber}:`, error);
-    return `[Error summarizing section ${chunkNumber}]`;
-  }
-}
-
-async function generateFinalSummary(chunkSummaries) {
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer YOUR_API_KEY_HERE'
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a helpful assistant that creates comprehensive summaries of parliamentary speeches. Create a well-structured, detailed summary that combines all the section summaries into a coherent whole. Use bullet points and organize the information logically.'
-          },
-          {
-            role: 'user',
-            content: `Please create a comprehensive summary of this parliamentary speech by combining the following section summaries:\n\n${chunkSummaries.join('\n\n')}`
-          }
-        ],
-        temperature: 0.3
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`OpenAI API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
-    }
-
-    const data = await response.json();
-    return data.choices[0].message.content;
-  } catch (error) {
-    console.error('Error generating final summary:', error);
-    return `Error generating final summary: ${error.message}`;
-  }
-}
-
-function updateProgress(current, total, status) {
-  const progressDiv = document.getElementById('summaryProgress');
-  const progressBar = document.getElementById('progressBar');
-  const progressStatus = document.getElementById('progressStatus');
-  const progressPercentage = document.getElementById('progressPercentage');
-  
-  progressDiv.style.display = 'block';
-  const percentage = Math.round((current / total) * 100);
-  progressBar.style.width = `${percentage}%`;
-  progressPercentage.textContent = `${percentage}%`;
-  progressStatus.textContent = status;
-}
-
-async function generateAISummary(content) {
-  try {
-    // Show initial progress
-    updateProgress(0, 100, 'Analyzing content...');
-    
-    // Split content into chunks
-    const chunks = await splitIntoChunks(content);
-    const totalChunks = chunks.length;
-    
-    // Update progress for chunk splitting
-    updateProgress(1, totalChunks + 2, 'Content split into sections');
-    
-    // Generate summaries for each chunk
-    const chunkSummaries = [];
-    for (let i = 0; i < chunks.length; i++) {
-      updateProgress(i + 2, totalChunks + 2, `Summarizing section ${i + 1} of ${totalChunks}`);
-      const summary = await generateChunkSummary(chunks[i], i + 1, totalChunks);
-      chunkSummaries.push(summary);
-    }
-    
-    // Update progress for final summary
-    updateProgress(totalChunks + 1, totalChunks + 2, 'Generating final summary');
-    
-    // Generate final summary from all chunk summaries
-    const finalSummary = await generateFinalSummary(chunkSummaries);
-    
-    // Hide progress bar and show completion
-    updateProgress(totalChunks + 2, totalChunks + 2, 'Summary complete');
-    setTimeout(() => {
-      document.getElementById('summaryProgress').style.display = 'none';
-    }, 1000);
-    
-    return finalSummary;
-  } catch (error) {
-    console.error('Error in summary generation process:', error);
-    // Show error in progress bar
-    updateProgress(0, 100, `Error: ${error.message}`);
-    return `Error generating summary: ${error.message}`;
-  }
-}
-
 // Helper to render markdown safely
 function renderMarkdown(md) {
   if (window.marked) {
@@ -307,95 +138,13 @@ function renderMarkdown(md) {
           contentSection.innerHTML = `<details open><summary style="font-size:1.15em;font-weight:600;color:var(--eu-blue);cursor:pointer;outline:none;">Speech Content</summary><div id="speechContentMain">${content.replace(/\n/g, '<br>')}</div></details>`;
           contentSection.setAttribute('data-collapsible', 'true');
         }
-        // Don't run AI features automatically - user will click buttons to start them
-        console.log('📝 Content loaded. AI features available via buttons.');
-        
-        // Set up AI button event handlers
-        setupAIButtons(content);
-        
         // Load individual speeches if available
         loadIndividualSpeeches(speech.id);
 
-        // --- AI Chat Logic ---
-        const chatForm = document.getElementById('chatForm');
-        const chatInput = document.getElementById('chatInput');
-        const chatWindow = document.getElementById('chatWindow');
-        const summaryEl = document.getElementById('aiSummary');
-        let chatHistory = [];
-        let summaryText = '';
-
-        // Wait for summary to be generated, then set summaryText
-        if (summaryEl) {
-          const observer = new MutationObserver(() => {
-            summaryText = summaryEl.textContent || '';
-          });
-          observer.observe(summaryEl, { childList: true, subtree: true, characterData: true });
-          // Set initial value
-          summaryText = summaryEl.textContent || '';
+        // Set content and sitting ID for AI chat widget
+        if (typeof window.setAIChatContent === 'function') {
+          window.setAIChatContent(content, speech.id);
         }
-
-        function appendChat(role, text) {
-          const msgDiv = document.createElement('div');
-          msgDiv.style.marginBottom = '0.5rem';
-          msgDiv.style.whiteSpace = 'pre-wrap';
-          msgDiv.innerHTML = `<strong>${role === 'user' ? 'You' : 'AI'}:</strong> ` + renderMarkdown(text);
-          chatWindow.appendChild(msgDiv);
-          chatWindow.scrollTop = chatWindow.scrollHeight;
-        }
-
-        chatForm.onsubmit = async (e) => {
-          e.preventDefault();
-          const question = chatInput.value.trim();
-          if (!question) return;
-          appendChat('user', question);
-          chatInput.value = '';
-          chatInput.disabled = true;
-          chatForm.querySelector('button').disabled = true;
-
-          // Use the full speech content as context for the AI chat
-          const contextMessages = [
-            {
-              role: 'system',
-              content: 'You are an expert assistant for European Parliament sessions. Answer questions based on the following full speech content. If the answer is not in the content, say so.'
-            },
-            {
-              role: 'user',
-              content: `Full speech content:\n\n${content}\n\n(Only use the information in this content.)`
-            }
-          ];
-          // Add previous chat turns (last 3 exchanges)
-          chatHistory.slice(-6).forEach(msg => contextMessages.push(msg));
-          contextMessages.push({ role: 'user', content: question });
-
-          try {
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer YOUR_API_KEY_HERE'
-              },
-              body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                messages: contextMessages,
-                temperature: 0.2
-              })
-            });
-            if (!response.ok) {
-              throw new Error('OpenAI API error');
-            }
-            const data = await response.json();
-            const answer = data.choices[0].message.content;
-            appendChat('assistant', answer);
-            chatHistory.push({ role: 'user', content: question });
-            chatHistory.push({ role: 'assistant', content: answer });
-          } catch (err) {
-            appendChat('assistant', 'Sorry, there was an error contacting OpenAI.');
-          } finally {
-            chatInput.disabled = false;
-            chatForm.querySelector('button').disabled = false;
-            chatInput.focus();
-          }
-        };
 
         const session = getSessionNumber(sittingDate);
         const htmlUrl = `https://www.europarl.europa.eu/doceo/document/CRE-${session}-${sittingDate}_EN.html`;
@@ -430,8 +179,11 @@ function renderMarkdown(md) {
       console.error('Error loading speaker details:', e);
     }
   } else {
-    // Display a fallback message if no speaker information is available
-    document.getElementById('mepDetails').innerHTML = '<p>No speaker information available.</p>';
+    // Hide the speaker info section if no speaker information is available
+    const mepDetailsEl = document.getElementById('mepDetails');
+    if (mepDetailsEl) {
+      mepDetailsEl.style.display = 'none';
+    }
   }
 
   // External transcript link if available
@@ -512,44 +264,130 @@ function renderMarkdown(md) {
     }
   }
 
-  // Helper to ask AI who spoke today (for the Speaker Finder section)
-  async function runSpeakerFinder(content) {
-    aiSpeakerFinderWindow.innerHTML = '<em>Loading...</em>';
+  // Function to load and display speakers list
+  async function loadSpeakersList(sittingId) {
+    const speakersListEl = document.getElementById('speakersList');
+    const viewAllLinkEl = document.getElementById('viewAllSpeakersLink');
+    
+    if (!speakersListEl) return;
+    
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer YOUR_API_KEY_HERE'
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a helpful assistant for parliamentary data. ONLY return a bulletpoint list of the names of the speakers who spoke in this session, based on the following content. Do not add any explanations or extra text. If not clear, return "Unknown". After each name start a new line. use HTML to format it correctly.' 
-            },
-            {
-              role: 'user',
-              content: `Who were the speakers in this session? Use the full content.\n\nFull speech content:\n\n${content}`
-            }
-          ],
-          temperature: 0.2
-        })
-      });
-      if (!response.ok) throw new Error('OpenAI API error: ' + response.status);
+      const response = await fetch(`/api/speeches/${encodeURIComponent(sittingId)}/individual`);
       const data = await response.json();
-      if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
-        throw new Error('OpenAI response malformed or empty');
+      
+      if (data.individual_speeches && data.individual_speeches.length > 0) {
+        // Extract unique speakers with their mep_id
+        const speakerMap = new Map();
+        data.individual_speeches.forEach(speech => {
+          const speakerName = speech.speaker_name || 'Unknown Speaker';
+          const mepId = speech.mep_id;
+          // Use mep_id as key if available, otherwise use speaker name
+          const key = mepId || speakerName;
+          if (!speakerMap.has(key)) {
+            speakerMap.set(key, {
+              name: speakerName,
+              mepId: mepId
+            });
+          }
+        });
+        
+        const speakers = Array.from(speakerMap.values());
+        
+        if (speakers.length === 0) {
+          speakersListEl.innerHTML = '<div style="color:#666;">No speakers found.</div>';
+          return;
+        }
+        
+        // Display first 3 speakers
+        const firstThree = speakers.slice(0, 3);
+        let html = '<div style="display:flex;flex-direction:column;gap:0.5rem;align-items:flex-end;">';
+        firstThree.forEach(speaker => {
+          if (speaker.mepId) {
+            html += `<a href="/mep-details.html?id=${speaker.mepId}" target="_blank" style="color:var(--eu-blue);text-decoration:none;font-weight:500;text-align:right;">${speaker.name}</a>`;
+          } else {
+            html += `<span style="color:#333;text-align:right;">${speaker.name}</span>`;
+          }
+        });
+        html += '</div>';
+        speakersListEl.innerHTML = html;
+        
+        // Show "view all" link if there are more than 3 speakers
+        if (speakers.length > 3) {
+          viewAllLinkEl.style.display = 'block';
+          viewAllLinkEl.onclick = (e) => {
+            e.preventDefault();
+            showAllSpeakersPopup(speakers);
+          };
+        } else {
+          viewAllLinkEl.style.display = 'none';
+        }
+      } else {
+        speakersListEl.innerHTML = '<div style="color:#666;">No speakers found.</div>';
       }
-      aiSpeakerFinderWindow.innerHTML = data.choices[0].message.content;
-    } catch (e) {
-      aiSpeakerFinderWindow.innerHTML = '<span style="color:#b00">Failed to get AI answer: ' + (e.message || e) + '</span>';
+    } catch (error) {
+      console.error('❌ Error loading speakers:', error);
+      speakersListEl.innerHTML = '<div style="color:#b00;">Error loading speakers.</div>';
     }
+  }
+  
+  // Function to show popup with all speakers
+  function showAllSpeakersPopup(speakers) {
+    // Create popup overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+    
+    // Create popup content
+    const popup = document.createElement('div');
+    popup.style.cssText = 'background:white;border-radius:8px;padding:2rem;max-width:500px;max-height:80vh;overflow-y:auto;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+    
+    let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">';
+    html += '<h3 style="margin:0;color:var(--eu-blue);">All Speakers</h3>';
+    html += '<button id="closePopupBtn" style="background:none;border:none;font-size:1.5em;cursor:pointer;color:#666;">&times;</button>';
+    html += '</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:0.75rem;">';
+    
+    speakers.forEach(speaker => {
+      if (speaker.mepId) {
+        html += `<a href="/mep-details.html?id=${speaker.mepId}" target="_blank" style="color:var(--eu-blue);text-decoration:none;font-weight:500;padding:0.5rem;border-radius:4px;transition:background 0.2s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">${speaker.name}</a>`;
+      } else {
+        html += `<div style="color:#333;padding:0.5rem;">${speaker.name}</div>`;
+      }
+    });
+    
+    html += '</div>';
+    popup.innerHTML = html;
+    
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+    
+    // Close button handler
+    const closeBtn = popup.querySelector('#closePopupBtn');
+    closeBtn.onclick = () => {
+      document.body.removeChild(overlay);
+    };
+    
+    // Click outside to close
+    overlay.onclick = (e) => {
+      if (e.target === overlay) {
+        document.body.removeChild(overlay);
+      }
+    };
+    
+    // ESC key to close
+    const escHandler = (e) => {
+      if (e.key === 'Escape') {
+        document.body.removeChild(overlay);
+        document.removeEventListener('keydown', escHandler);
+      }
+    };
+    document.addEventListener('keydown', escHandler);
   }
 
   // Call quick overview logic after content is loaded
   setQuickSpeakerInfo();
+  
+  // Load and display speakers from individual speeches
+  loadSpeakersList(speech.id);
 })();
 
 // Function to load and display individual speeches
@@ -672,60 +510,4 @@ function displayIndividualSpeeches(speeches) {
       arrow.className = 'dropdown-arrow';
     });
   }, 100);
-}
-
-// Function to set up AI button event handlers
-function setupAIButtons(content) {
-  // AI Summary Button
-  const startAISummaryBtn = document.getElementById('startAISummaryBtn');
-  if (startAISummaryBtn) {
-    startAISummaryBtn.addEventListener('click', async () => {
-      const summaryEl = document.getElementById('aiSummary');
-      const progressEl = document.getElementById('summaryProgress');
-      
-      if (summaryEl && progressEl) {
-        // Show progress and disable button
-        startAISummaryBtn.disabled = true;
-        startAISummaryBtn.textContent = '🔄 Generating...';
-        progressEl.style.display = 'block';
-        summaryEl.innerHTML = 'Generating AI summary...';
-        
-        try {
-          const summary = await generateAISummary(content);
-          summaryEl.innerHTML = renderMarkdown(summary);
-          startAISummaryBtn.textContent = '✅ Summary Complete';
-        } catch (error) {
-          summaryEl.textContent = `Error generating summary: ${error.message}`;
-          startAISummaryBtn.textContent = '❌ Error - Try Again';
-          startAISummaryBtn.disabled = false;
-        }
-        
-        progressEl.style.display = 'none';
-      }
-    });
-  }
-  
-  // AI Speaker Finder Button
-  const startAISpeakerFinderBtn = document.getElementById('startAISpeakerFinderBtn');
-  if (startAISpeakerFinderBtn) {
-    startAISpeakerFinderBtn.addEventListener('click', async () => {
-      const speakerWindow = document.getElementById('aiSpeakerFinderWindow');
-      
-      if (speakerWindow) {
-        // Disable button and show loading
-        startAISpeakerFinderBtn.disabled = true;
-        startAISpeakerFinderBtn.textContent = '🔄 Finding Speakers...';
-        speakerWindow.innerHTML = 'Finding speakers with AI...';
-        
-        try {
-          await runSpeakerFinder(content);
-          startAISpeakerFinderBtn.textContent = '✅ Speakers Found';
-        } catch (error) {
-          speakerWindow.innerHTML = `Error finding speakers: ${error.message}`;
-          startAISpeakerFinderBtn.textContent = '❌ Error - Try Again';
-          startAISpeakerFinderBtn.disabled = false;
-        }
-      }
-    });
-  }
 }
