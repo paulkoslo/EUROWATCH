@@ -90,3 +90,4 @@ temp/
 
 # PM2 logs
 pm2.log
+.DS_Store
