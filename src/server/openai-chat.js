@@ -6,7 +6,7 @@
 require('dotenv').config();
 const OpenAI = require('openai');
 
-const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-5-mini';
 
 let _client = null;
 function getClient() {
