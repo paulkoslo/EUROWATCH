@@ -7,6 +7,7 @@ const fs = require('fs');
 
 const app = express();
 const { PORT, API_BASE, LOCALRUN } = require('./src/server/config');
+const FULL_DATASET_DOWNLOAD_PATH = process.env.FULL_DATASET_DOWNLOAD_PATH || path.join(__dirname, 'data', 'downloads', 'ep_data_snapshot.db');
 
 /** Middleware: reject data actions when LOCALRUN env is not set (production) */
 const requireLocalRun = (req, res, next) => {
@@ -67,6 +68,46 @@ if (handleCli(db)) return;
 
     // Serve static assets (static site files located in public directory)
     app.use(express.static(path.join(__dirname, 'public')));
+
+    app.get('/api/full-dataset/status', async (req, res) => {
+      try {
+        const stat = await fs.promises.stat(FULL_DATASET_DOWNLOAD_PATH);
+        res.json({
+          available: true,
+          filename: path.basename(FULL_DATASET_DOWNLOAD_PATH),
+          sizeBytes: stat.size,
+          updatedAt: stat.mtime.toISOString()
+        });
+      } catch (err) {
+        if (err.code === 'ENOENT') {
+          return res.json({
+            available: false,
+            filename: path.basename(FULL_DATASET_DOWNLOAD_PATH)
+          });
+        }
+        console.error('[FULL-DATASET] Failed to inspect snapshot:', err);
+        return res.status(500).json({ error: 'Failed to inspect full dataset snapshot' });
+      }
+    });
+
+    app.get('/api/download/full-dataset', async (req, res) => {
+      try {
+        await fs.promises.access(FULL_DATASET_DOWNLOAD_PATH, fs.constants.R_OK);
+      } catch (err) {
+        if (err.code === 'ENOENT') {
+          return res.status(404).json({ error: 'Full dataset snapshot not found' });
+        }
+        console.error('[FULL-DATASET] Snapshot is not readable:', err);
+        return res.status(500).json({ error: 'Full dataset snapshot is not readable' });
+      }
+
+      res.download(FULL_DATASET_DOWNLOAD_PATH, path.basename(FULL_DATASET_DOWNLOAD_PATH), (err) => {
+        if (err && !res.headersSent) {
+          console.error('[FULL-DATASET] Download failed:', err);
+          res.status(500).json({ error: 'Failed to download full dataset snapshot' });
+        }
+      });
+    });
 
     // GET /api/meps: return all MEPs from DB with speech counts
     app.get('/api/meps', (req, res) => {

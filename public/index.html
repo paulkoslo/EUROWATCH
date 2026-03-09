@@ -24,6 +24,7 @@
       <button class="tab" data-tab="speeches">Parliament Sittings</button>
       <button class="tab" data-tab="analytics">Descriptive Analytics</button>
       <button class="tab" data-tab="export">Export</button>
+      <button class="tab" data-tab="full-data-download">Full Data Download</button>
     </nav>
 
     <!-- MEPs tab content -->
@@ -499,6 +500,55 @@
           </div>
         </div>
         <div id="exportProgressMessage" style="color:#0369a1; font-size:14px; text-align:center;"></div>
+      </div>
+    </div>
+
+    <div id="full-data-download" class="tab-content">
+      <h2>Full Data Download</h2>
+      <div style="margin-bottom:1.5rem;color:#555">
+        Download the full SQLite snapshot of the European Parliament dataset. This is the stable single-file export intended for heavy local analysis, scripting, and agent-based research workflows.
+      </div>
+
+      <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:1.5rem; margin-bottom:1.5rem;">
+        <h3 style="margin:0 0 1rem 0; color:#1e293b;">Dataset Snapshot</h3>
+        <div id="fullDatasetStatus" style="margin-bottom:1rem; color:#334155;">Checking snapshot availability...</div>
+        <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
+          <button id="downloadFullDataset" style="padding:10px 20px; font-size:14px; font-weight:600; background:#0f766e; color:white; border:none; border-radius:6px; cursor:pointer; box-shadow:0 2px 4px rgba(15,118,110,0.25);" disabled>
+            ⬇️ Download Full EP Data (.db)
+          </button>
+          <div id="fullDatasetDownloadNote" style="font-size:14px; color:#475569;">
+            Use this for the full database snapshot. The browser handles the file download directly.
+          </div>
+        </div>
+      </div>
+
+      <div style="background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:1.5rem; margin-bottom:1.5rem;">
+        <h3 style="margin:0 0 0.75rem 0; color:#1e293b;">How To Use The File</h3>
+        <div style="color:#475569; line-height:1.65;">
+          <p style="margin:0 0 0.75rem 0;">The downloaded file is a SQLite database. You can open it with DB Browser for SQLite, Datasette, DuckDB, or the `sqlite3` CLI.</p>
+          <p style="margin:0 0 0.75rem 0;"><strong>Quick local check:</strong></p>
+          <pre style="margin:0; padding:1rem; background:#0f172a; color:#e2e8f0; border-radius:6px; overflow:auto;"><code>sqlite3 /path/to/ep_data_snapshot.db ".tables"
+sqlite3 /path/to/ep_data_snapshot.db "SELECT COUNT(*) FROM individual_speeches;"
+sqlite3 /path/to/ep_data_snapshot.db "SELECT activity_date, speaker_name, macro_topic FROM individual_speeches LIMIT 20;"</code></pre>
+          <p style="margin:0.75rem 0 0 0;">If you want CSVs, generate them locally from this file instead of exporting the entire dataset through the website runtime.</p>
+        </div>
+      </div>
+
+      <div style="background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:1.5rem;">
+        <h3 style="margin:0 0 0.75rem 0; color:#1e293b;">Prompt For Your Agent</h3>
+        <div style="margin-bottom:0.75rem; color:#475569;">Give your coding or research agent a prompt like this after you download the database:</div>
+        <pre style="margin:0; padding:1rem; background:#111827; color:#e5e7eb; border-radius:6px; white-space:pre-wrap; line-height:1.5;">You are working with a local SQLite database file at /path/to/ep_data_snapshot.db.
+
+Use sqlite3 or a Python/Node SQLite client to inspect the schema first, identify the main tables, and summarize the key columns. Then answer my questions by querying the database directly instead of guessing.
+
+Rules:
+- Start by listing tables and row counts.
+- Inspect the schema for individual_speeches, sittings, and meps.
+- Prefer SQL queries over loading the entire database into memory.
+- When exporting large results, write them to files in batches.
+- Show me the SQL you used and briefly explain the result.
+
+My task is: [replace this with your actual analysis request]</pre>
       </div>
     </div>
   </div>

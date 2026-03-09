@@ -2267,3 +2267,62 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 })();
 
+// --- Full Dataset Download ---
+(function() {
+  const downloadBtn = document.getElementById('downloadFullDataset');
+  const statusEl = document.getElementById('fullDatasetStatus');
+  const noteEl = document.getElementById('fullDatasetDownloadNote');
+
+  function formatBytes(bytes) {
+    if (!Number.isFinite(bytes) || bytes < 0) return 'Unknown size';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let value = bytes;
+    let unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+    return `${value.toFixed(unitIndex === 0 ? 0 : 2)} ${units[unitIndex]}`;
+  }
+
+  async function loadFullDatasetStatus() {
+    if (!downloadBtn || !statusEl || !noteEl) return;
+
+    try {
+      const response = await fetch('/api/full-dataset/status');
+      if (!response.ok) throw new Error(`Status request failed (${response.status})`);
+
+      const data = await response.json();
+      if (!data.available) {
+        downloadBtn.disabled = true;
+        downloadBtn.style.opacity = '0.6';
+        downloadBtn.style.cursor = 'not-allowed';
+        statusEl.textContent = 'Snapshot not found. Create / refresh data/downloads/ep_data_snapshot.db on the Render disk first.';
+        noteEl.textContent = 'The button will enable automatically once the snapshot file exists.';
+        return;
+      }
+
+      const updatedAt = data.updatedAt ? new Date(data.updatedAt).toLocaleString() : 'Unknown';
+      statusEl.textContent = `Ready: ${data.filename} • ${formatBytes(data.sizeBytes)} • updated ${updatedAt}`;
+      noteEl.textContent = 'This uses a direct browser download of the SQLite snapshot, which is safer than exporting the full dataset through the CSV flow.';
+      downloadBtn.disabled = false;
+      downloadBtn.style.opacity = '1';
+      downloadBtn.style.cursor = 'pointer';
+    } catch (error) {
+      console.error('Error loading full dataset status:', error);
+      downloadBtn.disabled = true;
+      downloadBtn.style.opacity = '0.6';
+      downloadBtn.style.cursor = 'not-allowed';
+      statusEl.textContent = 'Could not verify snapshot availability.';
+      noteEl.textContent = 'Check the server logs or confirm that the snapshot file exists on the Render disk.';
+    }
+  }
+
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', () => {
+      window.location.href = '/api/download/full-dataset';
+    });
+  }
+
+  loadFullDatasetStatus();
+})();
