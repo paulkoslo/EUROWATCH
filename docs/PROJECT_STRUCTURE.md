@@ -1,24 +1,28 @@
 # Project structure
 
-All application code lives under **`src/`** so the repo has one clear place for code and the root stays for config, data, and entry points.
+The browsing service and offline collection tools are separate.
 
-## Why the split?
+| Location | Role |
+|---|---|
+| `server.js` | Loads a prepared dataset, starts HTTP, handles shutdown. No initialization, scraping or AI. |
+| `src/explorer/app.js` | Read-only HTTP routes, security headers, bounded cache and CSV streaming. |
+| `src/explorer/params.js` | Shared input validation and bounded selections. |
+| `src/explorer/queries.js` | Sitting/speaker queries, chronology, topic aggregation and coverage. |
+| `src/data/sqlite.js` | Promise wrappers and SQLite backup. |
+| `src/data/schema.js` | Explicit offline schema creation/migration and prepared-schema validation. |
+| `src/data/dataset.js` | Copy, validate, derive analytics, hash, load and promote immutable releases. |
+| `src/scripts/dataset.js` | CLI for `data:init`, `data:prepare`, `data:validate`, `data:promote`. |
+| `public/index.html`, `public/app.js`, `public/style.css` | Browser UI with URL state, text-safe rendering, local SVG chart and table. |
+| `test/` | Deterministic fixtures and Node regression tests. |
+| `.github/workflows/ci.yml` | Install, lint, formatting, tests and production dependency audit; no deployment. |
+| `src/core/`, `src/pipeline/` | Legacy offline research/ingestion code. Not imported by the public server. |
+| `src/server/` | Legacy server/maintenance helpers still used by some offline tools. Not the current HTTP app. |
+| `archive/` | Older research scripts, retained for reference. |
 
-| Folder | Role | Used by |
-|--------|------|--------|
-| **`src/core/`** | Foundational, reusable logic: DB path, parliament API fetch, parsing, analytics DB, language detection, topic/macro agents. No HTTP or CLI. | server, pipeline, scripts |
-| **`src/server/`** | HTTP app glue: config, progress bars, speech fetch/parse wrappers, MEPs API, historic MEPs, init-db, analytics cache, CLI. Uses `core`; no duplication of parsing or fetch logic. | `server.js` only |
-| **`src/pipeline/`** | CLI pipeline: refresh (newest sitting) and bulk (date range). Uses `core` + `scripts`. | `node src/pipeline` / npm scripts |
-| **`src/scripts/`** | Standalone step scripts (discover date, fetch HTML, parse sitting, classify, store). Used by pipeline and sometimes run by hand. | pipeline, manual |
+`data/releases/NAME/` contains `ep_data.db`, a matched `analytics.db`, and `manifest.json`. It is ignored by Git. `data/current.json` selects a release; promotion changes this pointer atomically, and a restart switches both database files together. `DATASET_DIR` can select a directory directly.
 
-- **core** = shared primitives; **server** = app-specific glue for the Express app; **pipeline** = data-ingestion CLI; **scripts** = pipeline steps and one-off tools.
-- `server.js` stays at repo root as the main entry; it only `require()`s from `src/core` and `src/server`, and starts the server.
+The original `data/ep_data.db`, legacy analytics and original demo are not public runtime inputs. Preparation reads the source using SQLite’s backup API, then migrates and indexes only the copy. It creates a speaker browsing projection that preserves inferred records and handles valid numeric unresolved IDs; blank IDs remain visible through their original sitting contributions.
 
-## Root layout
+The new analytics database contains normalized monthly topic counts, monthly corpus coverage, topic totals and matching release metadata. Month/quarter/year views aggregate these small tables using one filter contract. Neither a cache miss nor opening a chart triggers full-corpus rebuilding.
 
-- `server.js` — HTTP server entry point
-- `package.json` — scripts point at `src/pipeline`, `src/scripts`
-- `public/` — static frontend
-- `data/` — SQLite DBs, macro-topics, etc.
-- `docs/` — this file and other docs
-- `archive/` — legacy / unused code
+Public code has no dependency on Parliament network access or OpenAI. Keep future collection changes within the offline pipeline and promote a validated snapshot explicitly.
