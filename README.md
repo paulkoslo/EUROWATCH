@@ -100,7 +100,7 @@ Tests create disposable databases and HTTP servers. They cover backup/source pre
 
 Public runtime dependencies are Express, sqlite3 and dotenv. Legacy collection/classification dependencies are development-only and never imported by the server. The CLD3 tooling dependency still carries an upstream Nano ID advisory: the loader uses a constant positive length, and this offline path is absent from the public runtime. Retire/update that legacy loader before making it network-accessible; do not use a forced downgrade that changes the detector silently.
 
-See [project structure](docs/PROJECT_STRUCTURE.md), the [initial audit](docs/AUDIT_2026-11-05.md), [accepted stabilization scope](docs/STABILIZATION_PLAN.md) and [release notes and verification](docs/STABILIZATION_RELEASE.md).
+See the [product roadmap](docs/ROADMAP.md), [project structure](docs/PROJECT_STRUCTURE.md), [initial audit](docs/AUDIT_2026-11-05.md), [accepted stabilization scope](docs/STABILIZATION_PLAN.md) and [release notes and verification](docs/STABILIZATION_RELEASE.md).
 
 ## Offline maintenance
 
@@ -130,9 +130,7 @@ The importer records agenda topics, detects speech language locally and links un
 
 ## Deployment and rollback
 
-The current work belongs on `codex/stabilize-eurowatch`. **Do not switch the existing Render service or merge into `main` until its prepared dataset has been provisioned.** An old writable database by itself is insufficient for the new server.
-
-See [Render deployment notes](docs/RENDER_DEMO.md) for the proposed setup. Before selecting this code on a host, upload a validated release directory to persistent storage, configure `DATASET_DIR`, Node LTS, `NODE_ENV=production`, `HOST=0.0.0.0` and the host’s port. Build with `npm ci --omit=dev`; start with `npm start`. Test readiness and the three browsing flows on the intended host.
+See the [Render deployment notes](docs/RENDER_DEMO.md) for the SQLite build command and service settings. Upload a validated release directory to persistent storage and point `DATASET_DIR` at it. Test readiness and browsing on the intended host.
 
 For a data rollback, promote a previous verified release and restart. For a code rollback, select the previous code commit **with its compatible dataset/configuration**. Retain the original code/data backups; never overwrite a release in place.
 
