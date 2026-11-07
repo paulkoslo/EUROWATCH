@@ -1,206 +1,133 @@
-# EUROWATCH v1.1 — European Parliament Speech Analysis Platform
+# EUROWATCH
 
-A web application and analysis platform for European Parliament speeches: data collection, AI-powered topic classification, language detection, macro-topic normalization, and analytics for political research.
+An independent explorer for European Parliament plenary speeches. Browse sittings, read contributions, find speakers and inspect topic trends against a prepared, read-only dataset.
 
-## What's new in v1.1
+The stabilization branch keeps the existing Node/Express/SQLite stack. It separates public browsing from offline maintenance, fixes filter and count consistency, and adds a small usable interface. It does not refresh or reinterpret the original research corpus automatically.
 
-- **Clean, scalable codebase** — All application code under `src/`: `core/` (DB, fetch, parsing, analytics, language detection, topic agents, group normalizer), `server/` (Express glue, init-db, analytics cache, MEP sync), `pipeline/` (refresh & bulk), `scripts/` (steps and one-off tools). Root stays minimal: `server.js`, `package.json`, `public/`, `data/`, `docs/`.
-- **Data menu (floating button)** — All main data operations are available from the **Data** floating button: Check New Sittings, Build MEP Dataset, Refresh Languages, Normalize Macro Topics, Normalize Parties, Analyze (Generate Analytics DB). **Rebuild Database** is at the bottom (no step number), with a red background — use only when you need a full rebuild from scratch.
-- **Build MEP Dataset** — Clears MEP data and rebuilds from the EP API (term 5 to current), links speeches by name, creates historic MEPs for remaining speakers, runs the political group normalizer on speeches, then **syncs MEP affiliations** from speeches to `meps.politicalGroup` (so the MEP list and pie chart match speech-derived groups and roles). Small affiliations (&lt; 10 MEPs) are collapsed to **Other**.
-- **Normalize Parties** — Runs the political group normalizer on `individual_speeches` (sets `political_group_std`, kind, raw), then syncs affiliations to the MEP table (from standardized group, raw group, or **title** when no group is set). Titles like "Member of the Commission", "rapporteur", "Chair of the Delegation" are mapped to display labels; procedural titles (e.g. "in writing", "blue-card") are skipped. Again collapses small groups to **Other**. Use this to refresh affiliations without rebuilding MEPs.
-- **MEP Role/Affiliation** — The dashboard shows one affiliation per MEP (pie chart, table, export). It is derived from speeches: normalized group, or raw `political_group`, or **title** (role). That value is synced to `meps.politicalGroup` when you run Normalize Parties or Build MEP Dataset. Affiliations with fewer than 10 members are displayed and stored as **Other**.
-- **Normalize Macro Topics** — AI agent suggests rules to unify similar macro topics (e.g. "Foreign policy — Cuba" and "Foreign policy — Central America" → "Foreign policy — Americas"); optional test script for dry-run; apply from the Data menu.
-- **Refresh Languages** — Re-run language detection on all speeches from the Data menu (CLD3 + franc, EU-constrained).
-- **Analytics on demand** — Pre-computed analytics DB is generated via Data → **Analyze (Generate Analytics DB)** (step 6); Descriptive Analytics tab loads from it automatically when opened.
-- **Pipeline** — `npm run pipeline` (or `npm run bulk -- --full`) for CLI-based refresh and bulk ingestion; see `src/pipeline/` and `docs/PROJECT_STRUCTURE.md`.
+## Run locally
 
----
+Use a supported Node.js LTS release (the checked-in `.nvmrc` selects Node 22).
 
-## Project overview
+```sh
+nvm use
+npm ci
+npm run data:fixture
+DATASET_DIR=data/fixture npm start
+```
 
-EUROWATCH collects, processes, and analyzes European Parliament speeches and combines scraping, NLP, and ML to support research on parliamentary proceedings and policy trends.
+Open [localhost:3000](http://localhost:3000). The fixture is deliberately tiny and includes missing metadata, unresolved identities and text containing HTML. No API keys, upstream requests or large downloads are needed. `data:fixture` refuses to overwrite an existing fixture; select a new output with the preparation command below if needed.
 
-### Key features
+For the full local corpus, first keep a verified backup outside the repository, then prepare a **new** release directory:
 
-- **Real-time data collection** — Pipeline to fetch and parse EU Parliament sittings and speeches
-- **AI topic classification** — GPT-based speech categorization with macro/specific topics
-- **Interactive dashboard** — MEPs, speeches, and Descriptive Analytics (topics, time series, by group/country, languages)
-- **Language detection** — Automatic detection for 24 EU languages (CLD3 + franc)
-- **Macro-topic normalization** — AI-suggested rules to unify duplicate or similar topic labels
-- **Pre-computed analytics** — SQLite analytics DB for fast charts and filters
-- **SQLite storage** — Main DB and analytics DB under `data/`
-
----
-
-## Replication: running locally
-
-Because the database and analytics files are not in the repo (size), you generate your own dataset. The recommended way is to use the **Data** floating button in the web UI and follow the order below.
-
-### Prerequisites
-
-- **Node.js** 18+
-- **npm**
-- **OpenAI API key** (for AI topic classification and Normalize Macro Topics; add to `.env`)
-
-### Quick setup
-
-```bash
-git clone <repository-url>
-cd EUROWATCH
-
-npm install
-echo "OPENAI_API_KEY=your-api-key-here" > .env
-echo "LOCALRUN=1" >> .env   # required to show Data menu (local replication only)
+```sh
+npm run data:prepare -- --source data/ep_data.db --output data/releases/baseline
+npm run data:validate -- --dataset data/releases/baseline
+npm run data:promote -- --dataset data/releases/baseline
 npm start
 ```
 
-Open **http://localhost:3000**. The **Data** button (floating, bottom-right) opens the menu for all data operations.
+Preparation uses SQLite’s backup API and changes only the copy. It computes matching topic analytics, data-quality counts and file hashes. Depending on disk speed, it may take several minutes and needs space for another full copy. Release directories cannot be overwritten. The original `data/ep_data.db` and legacy `analytics.db` are not changed.
 
-**LOCALRUN** — The floating Data menu and its actions (Check New Sittings, Build MEP Dataset, etc.) are only available when the `LOCALRUN` environment variable is set. Set it locally (e.g. `LOCALRUN=1` in `.env`) to use the menu. On the public website, do not set it so the menu is hidden and data actions are disabled.
+Promotion atomically updates an ignored `data/current.json` pointer. Restart the server to select that release. Set `DATASET_DIR` to use a prepared directory directly. The public server deliberately ignores legacy `DB_PATH`, `ANALYTICS_DB_PATH`, `LOCALRUN` and automatic-ingestion settings; these must not point public browsing at a writable research database.
 
-### Data menu (floating button)
+To prepare a smaller consistent corpus:
 
-The main replication workflow uses the **Data** menu. Click the blue **Data** button to open it:
-
-![Data menu — use this for replication](public/img/Floating-menu.png)
-
-The menu lists **numbered steps (1–6)** and one unnumbered dangerous action at the bottom:
-
-| Step | Action | When to use |
-|------|--------|-------------|
-| **1** | **Check New Sittings** | Incremental update: fetch and store only new sittings since last run. Fast; no normalizer or MEP rebuild. Use regularly after initial setup. |
-| **2** | **Build MEP Dataset** | Clear all MEP data and rebuild: fetch MEPs from EP API (term 5+), link speeches by name, create historic MEPs for remaining speakers, run political group normalizer on speeches, sync affiliations to `meps.politicalGroup`, collapse small groups to **Other**. Use after you have sittings/speeches (e.g. after Rebuild Database or pipeline). |
-| **3** | **Refresh Languages** | Re-detect language for every speech (overwrites existing). Run so all speeches have a language. |
-| **4** | **Normalize Macro Topics** | AI agent suggests unification rules, then applies them so similar macro topics become one. Optional; requires `OPENAI_API_KEY`. |
-| **5** | **Normalize Parties** | Run the political group normalizer on speeches (set `political_group_std` etc.), then sync MEP affiliations from speeches (group + title); collapse affiliations with &lt; 10 MEPs to **Other**. Does not rebuild MEPs. Use to refresh Role/Affiliation without a full MEP rebuild. |
-| **6** | **Analyze (Generate Analytics DB)** | Build or rebuild the pre-computed analytics database (topics, time series, by group/country, languages). Required for the Descriptive Analytics tab. |
-| — | **Rebuild Database** | **Dangerous.** Full rebuild from scratch (from 1999): all sittings and speeches. Shown at the bottom with a red background. Use only when you have no data or need to start over. Can take many hours. |
-
-### Recommended order for a fresh install
-
-When you have **no data yet**, use the Data menu in this order:
-
-1. **Rebuild Database** (bottom of menu, red)  
-   Fetches and stores all sittings and speeches from the EU Parliament (from 1999). This can take several hours. Use only when starting from scratch.
-
-2. **Build MEP Dataset** (step 2)  
-   Builds the MEP table from the EP API, links speeches, creates historic MEPs, normalizes political groups on speeches, and syncs Role/Affiliation to the MEP table (including from speech titles). Small groups become **Other**.
-
-3. **Refresh Languages** (step 3)  
-   Runs language detection on all speeches so the `language` column is filled.
-
-4. **Normalize Macro Topics** (step 4)  
-   Optional. Asks the AI for topic unification rules, then applies them. Requires `OPENAI_API_KEY`.
-
-5. **Analyze (Generate Analytics DB)** (step 6)  
-   Builds the analytics database used by the Descriptive Analytics tab. Re-run after big data changes.
-
-For **regular updates** after that, use **Check New Sittings** (step 1). To refresh only MEP affiliations (and group normalization on speeches) without rebuilding MEPs, use **Normalize Parties** (step 5).
-
-### Optional: test normalization (no DB writes)
-
-To preview which macro topics would be merged without changing the database:
-
-```bash
-node src/scripts/test-normalize-macro-topics.js
+```sh
+npm run data:prepare -- --source data/ep_data.db --output data/releases/since-2020 --from 2020-01-01
 ```
 
-Requires `OPENAI_API_KEY` and an existing DB with macro topics.
+Do not use the old `data/demo-data` files as a release: the audited copy contains speeches whose sittings are absent. Preparation rejects sitting orphans in an unfiltered source. Subsets retain speeches only for selected sittings, and regenerate their analytics.
 
-### Optional: CLI pipeline
+## What works
 
-For scripted or headless runs you can use the pipeline:
+- **Sittings:** date filters, stable pagination, recorded contributions and links to the original Parliament record.
+- **Speakers:** name search, record-source filters, chronological contributions and explicit inferred/unresolved identities.
+- **Topics:** up to eight topics, month ranges and monthly/quarterly/yearly counts; a chart, accessible table, coverage information and matching CSV.
+- **Data & About:** snapshot cutoff, processing limitations, provenance notes, thesis link and date/field-based speech CSV export.
+- **Public service:** read-only databases, bounded requests/caches/exports, no maintenance or paid AI routes, predictable startup and health endpoints.
 
-```bash
-# Refresh: fetch and store new sittings from last fully processed date
-npm run pipeline
+The local full corpus audited on 5 November 2026 contained 368,934 speeches and 1,512 sitting records, dated 20 July 1999–12 February 2026. These are corpus counts, not a guarantee of exhaustive coverage. The UI reads its figures from the served release.
 
-# Full bulk: process a date range (see src/pipeline/index.js)
-npm run bulk
+Speaker records are not all verified MEPs. Some identities and many country/group fields are missing or inferred. Topics derive from agenda headings; languages are detected automatically. Data notes in the app explain these limitations. Blank chart periods mean no stored speeches, and aggregate periods report how many months have observations.
+
+## Configuration
+
+Copy `.env.example` if desired. Defaults are sufficient after promotion.
+
+| Variable | Purpose |
+|---|---|
+| `DATASET_DIR` | Prepared directory containing `ep_data.db`, `analytics.db`, `manifest.json`. Defaults to the promoted release. |
+| `HOST` | Defaults to `127.0.0.1`; defaults to `0.0.0.0` when `NODE_ENV=production`. |
+| `PORT` | HTTP port; default 3000. |
+| `TRUST_PROXY=1` | Trust exactly one reverse proxy. Enable only behind a controlled proxy such as the hosting service. |
+| `ENABLE_FULL_DATASET_DOWNLOAD=0` | Optional host override to disable the complete `.db` download. Full downloads are enabled by default. |
+
+No OpenAI key is used by the public application. Browser assets are served locally, without CDN scripts or remote fonts.
+
+## API
+
+Every `/api` response identifies the served dataset with `X-Dataset-ID`. API mutations return 405, including legacy maintenance routes.
+
+| Route | Supported parameters |
+|---|---|
+| `GET /api/data-status` | Snapshot identity, counts, cutoff and analytics availability. |
+| `GET /api/sittings` | `startDate`, `endDate` (`YYYY-MM-DD`), `limit`, `offset`. |
+| `GET /api/sittings/:id` | Sitting metadata and source URL. |
+| `GET /api/sittings/:id/speeches` | `limit`, `offset`. |
+| `GET /api/speakers` | `q`, `source` (`api`, `historic`, `unresolved`), `country`, `limit`, `offset`. |
+| `GET /api/speakers/:id` | Speaker metadata. |
+| `GET /api/speakers/:id/speeches` | `startDate`, `endDate`, `limit`, `offset`. |
+| `GET /api/topics` | Available normalized topic labels and corpus counts. |
+| `GET /api/analytics/time-series` | `topics` (JSON string array), `from`, `to` (`YYYY-MM`), `interval` (`month`, `quarter`, `year`), `top` (default 3). |
+| `GET /api/export/topics` | Exactly the same selection as time series; CSV includes corpus/period coverage. |
+| `GET /api/export/speeches` | `startDate`, `endDate`, comma-separated `fields`, `countOnly=true`. |
+| `GET /api/full-dataset/status` | Whether the complete snapshot download is enabled. |
+| `GET /api/download/full-dataset` | Complete prepared SQLite download, enabled by default. |
+| `GET /healthz`, `GET /readyz` | Process liveness, dataset readiness and analytics availability. |
+
+List limits are 1–100; topic comparisons are limited to eight series. Speech CSV export is limited to 10,000 selected rows and two concurrent streams. Choose a narrower date range for larger selections. Downloads escape CSV quoting and prefix spreadsheet formula-like text with an apostrophe. The speech export follows its own date/field selection, not other views’ filters.
+
+`/api/speeches?personId=...` remains a compatibility alias for **sittings containing that speaker’s contributions**. Old sitting/speaker HTML bookmarks redirect into the new explorer. Other unsupported legacy endpoints return 404; there is no public search/chat/refresh API.
+
+## Checks and development
+
+```sh
+npm run check
+npm audit --omit=dev --audit-level=high
 ```
 
-Language detection and analytics are still best run from the Data menu (or see `server.js` and `src/core/` for API/scripts).
+Tests create disposable databases and HTTP servers. They cover backup/source preservation, subset integrity, missing profiles, read-only serving, mutation denial, pagination, date validation, cached filter parity, gaps, exports and mismatched analytics. They require no API keys or external services. CI runs these checks on development branches and pull requests; it does not deploy anything.
 
----
+Public runtime dependencies are Express, sqlite3 and dotenv. Legacy collection/classification dependencies are development-only and never imported by the server. The CLD3 tooling dependency still carries an upstream Nano ID advisory: the loader uses a constant positive length, and this offline path is absent from the public runtime. Retire/update that legacy loader before making it network-accessible; do not use a forced downgrade that changes the detector silently.
 
-## Architecture
+See [project structure](docs/PROJECT_STRUCTURE.md), the [initial audit](docs/AUDIT_2026-11-05.md), [accepted stabilization scope](docs/STABILIZATION_PLAN.md) and [release notes and verification](docs/STABILIZATION_RELEASE.md).
 
-- **Frontend** — `public/`: main dashboard (`index.html`), speech view (`speech.html`), newest speeches (`newest.html`), shared `script.js` and styles.
-- **Backend** — `server.js` (Express): REST API, serves static files, wires in `src/server/` (init-db, analytics cache, speeches fetch, MEPs, config).
-- **Core** — `src/core/`: DB path, parliament fetch, parsing helpers, analytics DB, language detection, topic agent, normalize-topics agent and prompts.
-- **Pipeline** — `src/pipeline/`: refresh (new sittings) and bulk (date range); uses `src/scripts/` steps (discover, fetch HTML, parse sitting, classify, store).
-- **Data** — `data/`: main SQLite DB (`ep_data.db`), analytics DB (`analytics.db`), macro-topics list, macro-topic rules (from Normalize Macro Topics).
+## Offline maintenance
 
-See **`docs/PROJECT_STRUCTURE.md`** for the full layout and roles of `src/core`, `src/server`, `src/pipeline`, and `src/scripts`.
+Public browsing has no write mode. Collection, classification, language detection and normalization remain explicit offline tools under `src/pipeline`, `src/core` and `src/scripts`.
 
----
+```sh
+npm run data:init -- --output data/staging.db
+# Populate a writable staging copy using the offline tools, with DB_PATH set explicitly.
+# Validate it, then prepare a new release; never ingest into a prepared/public release.
+DB_PATH=data/staging.db npm run pipeline
+npm run data:prepare -- --source data/staging.db --output data/releases/next
+```
 
-## Installation & setup (summary)
+Install development dependencies for these tools (`npm ci`, rather than `--omit=dev`). AI classification requires a separately configured `OPENAI_API_KEY` and may incur costs. The legacy pipeline’s parsing/identity accuracy and failure accounting still need further work; it is not a background task or a prerequisite for browsing the existing corpus. No bulk reparse or relabeling was performed for this release.
 
-- **Prerequisites:** Node.js 18+, npm, OpenAI API key (for AI features).
-- **Install:** `npm install` and `echo "OPENAI_API_KEY=..." > .env`.
-- **Run:** `npm start` → http://localhost:3000.
-- **Replicate data:** Use the Data menu in order: Rebuild Database → Build MEP Dataset → Refresh Languages → (optional) Normalize Macro Topics → Analyze (Generate Analytics DB). For updates: Check New Sittings; to refresh affiliations only: Normalize Parties.
+## Deployment and rollback
 
----
+The current work belongs on `codex/stabilize-eurowatch`. **Do not switch the existing Render service or merge into `main` until its prepared dataset has been provisioned.** An old writable database by itself is insufficient for the new server.
 
-## Expected results after replication
+See [Render deployment notes](docs/RENDER_DEMO.md) for the proposed setup. Before selecting this code on a host, upload a validated release directory to persistent storage, configure `DATASET_DIR`, Node LTS, `NODE_ENV=production`, `HOST=0.0.0.0` and the host’s port. Build with `npm ci --omit=dev`; start with `npm start`. Test readiness and the three browsing flows on the intended host.
 
-- **Database** — `data/ep_data.db`: tables `sittings`, `individual_speeches`, `meps` (and related). Hundreds of thousands of speeches depending on date range. MEPs have `politicalGroup` synced from speeches (group or title); small groups stored as **Other**.
-- **Languages** — 24 EU languages detected and stored per speech.
-- **Topics** — Original agenda topics plus AI-classified macro/specific topics; optionally normalized via Normalize Macro Topics.
-- **Role/Affiliation** — One per MEP (PPE, S&D, Committee Rapporteur, European Commission, Other, etc.), from speeches; &lt; 10 members shown as **Other**.
-- **Analytics** — `data/analytics.db` and in-memory cache for the Descriptive Analytics tab (topics, time series, by group/country, languages).
+For a data rollback, promote a previous verified release and restart. For a code rollback, select the previous code commit **with its compatible dataset/configuration**. Retain the original code/data backups; never overwrite a release in place.
 
----
+## Background and license
 
-## Important notes
+EUROWATCH grew out of Paul Gerrit Koslowsky’s master’s research. Read [What they say vs how they say it: rhetorical polarization in the European Parliament (2015–2025) from multilingual speech analysis](https://ciencia.ucp.pt/en/studentTheses/what-they-say-vs-how-they-say-it/).
 
-- **Time** — Rebuild Database can take many hours; Check New Sittings is fast (new sittings only). Build MEP Dataset and Normalize Parties run the group normalizer and sync (minutes). Refresh Languages and Normalize Macro Topics scale with speech count; Analyze (Generate Analytics DB) usually finishes in under a few minutes.
-- **Storage** — Main DB and analytics DB can grow to several GB for full history.
-- **API costs** — OpenAI is used for topic classification (pipeline) and for Normalize Macro Topics; cost depends on usage.
-- **WAL mode** — SQLite is run with WAL and optimized indexes for better read/write performance.
+[Portfolio and contact](https://www.koslowsky.net/#contact).
 
----
-
-## API endpoints (overview)
-
-- **Data:** `GET /api/meps`, `GET /api/speeches`, `GET /api/sittings`, `GET /api/cache-status`, `GET /api/analytics/cache-status`
-- **Analytics:** `GET /api/analytics/overview`, `GET /api/analytics/time-series`, `GET /api/analytics/by-group`, `GET /api/analytics/by-language`, `GET /api/analytics/languages`
-- **Actions (POST):** `POST /api/test-pipeline` (Check New Sittings), `POST /api/refresh-mep-dataset` (Build MEP Dataset), `POST /api/refresh-languages` (Refresh Languages), `POST /api/normalize-macro-topics` (Normalize Macro Topics), `POST /api/normalize-parties` (Normalize Parties), `POST /api/generate-analytics` (Analyze), `POST /api/rebuild-database` (Rebuild Database)
-- **Search / speech:** `GET /api/search`, speech-by-id and related endpoints; see `server.js` for the full list.
-
----
-
-## Technical notes
-
-- **Modular layout** — `src/core` (shared logic), `src/server` (HTTP/init), `src/pipeline` (ingestion), `src/scripts` (steps and tools).
-- **Analytics** — Pre-computed in a separate SQLite DB; loaded into memory on first use or via Data → Analyze; Descriptive Analytics tab warms the cache when opened.
-- **Language detection** — `src/core/detect-language.js` (CLD3 + franc); optional script `src/scripts/detect-language.js`.
-- **Normalize Macro Topics** — Prompt in `src/core/prompts/normalize-macro-topics.js`; agent in `src/core/normalize-topics-agent.js`; apply logic in `src/core/normalize-topics-apply.js`; rules saved under `data/macro-topic-rules.json`.
-- **Political groups & MEP affiliation** — Group normalizer in `src/core/group-normalizer.js` (writes `political_group_std`, kind, raw on `individual_speeches`). Sync in `src/server/sync-mep-affiliations.js`: derives affiliation from `political_group_std`, raw `political_group`, or speech `title` (roles like rapporteur, Commission); skips procedural titles (e.g. "in writing", "blue-card"); maps to display labels; collapses affiliations with &lt; 10 MEPs to **Other** in the DB. Used after Normalize Parties and Build MEP Dataset. Display logic for API in `server.js` (GET /api/meps) and `src/server/affiliation-display.js`.
-
----
-
-## Contributing
-
-1. Fork the repo, create a feature branch, make changes, add tests if applicable, open a pull request.
-2. Follow existing patterns; keep application code under `src/` as in `docs/PROJECT_STRUCTURE.md`.
-
----
-
-## License
-
-This project is licensed under the MIT License — see the LICENSE file for details.
-
----
-
-## Acknowledgments
-
-- European Parliament for open data access
-- OpenAI for API and models
-- Node.js and the npm ecosystem
-
----
-
-**EUROWATCH** — Political research through data and AI
+Source code is licensed under [MIT](LICENSE). Parliamentary source material retains its source terms; the code license does not relicense it. Source: [European Parliament open data](https://data.europarl.europa.eu/). EUROWATCH is not affiliated with the European Union or European Parliament.
