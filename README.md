@@ -104,17 +104,27 @@ See [project structure](docs/PROJECT_STRUCTURE.md), the [initial audit](docs/AUD
 
 ## Offline maintenance
 
-Public browsing has no write mode. Collection, classification, language detection and normalization remain explicit offline tools under `src/pipeline`, `src/core` and `src/scripts`.
+Use Node from `.nvmrc` and install the maintenance dependencies with `npm ci`. Preview an import without opening a database. March 8 was a Sunday and March 9 was a plenary sitting.
 
 ```sh
-npm run data:init -- --output data/staging.db
-# Populate a writable staging copy using the offline tools, with DB_PATH set explicitly.
-# Validate it, then prepare a new release; never ingest into a prepared/public release.
-DB_PATH=data/staging.db npm run pipeline
-npm run data:prepare -- --source data/staging.db --output data/releases/next
+npm run data:import -- --dry-run --start 2026-03-08 --end 2026-03-09
 ```
 
-Install development dependencies for these tools (`npm ci`, rather than `--omit=dev`). AI classification requires a separately configured `OPENAI_API_KEY` and may incur costs. The legacy pipeline’s parsing/identity accuracy and failure accounting still need further work; it is not a background task or a prerequisite for browsing the existing corpus. No bulk reparse or relabeling was performed for this release.
+To extend the historical corpus, create a staging copy of the original research database. Use a fresh staging filename for the backup, and reuse that staging file for subsequent imports.
+
+```sh
+sqlite3 -readonly data/ep_data.db '.backup data/staging.db'
+npm run data:import -- --db data/staging.db --start 2026-02-13
+npm run data:prepare -- --source data/staging.db --output data/releases/plenary-preview
+npm run data:validate -- --dataset data/releases/plenary-preview
+DATASET_DIR=data/releases/plenary-preview PORT=4318 npm start
+```
+
+For a small standalone dataset, use `npm run data:init -- --output data/staging.db` instead of the backup and pass a short date range to the importer. The `--end` date defaults to yesterday in Brussels. The [Parliament meetings API](https://data.europarl.europa.eu/en/developer-corner/opendata-api) provides the sitting dates and official transcript IDs. The importer tries the transcript HTML first, then Parliament’s multilingual DOCX if needed. It stores DOCX transcript text as HTML with a source marker. The per-sitting log identifies which source was used and the final summary counts imported, existing, pending and failed sittings.
+
+Rerun with the same start date after a failure or publication delay. Each sitting commits independently and the command exits nonzero if any are pending or failed. A weekly job can use the same fixed start date so it also picks up late transcripts. Keep import, preparation and publication as separate steps. This repository does not configure a Render schedule.
+
+The importer records agenda topics, detects speech language locally and links unambiguous names already present in the MEP table. AI macro topics remain empty on new rows until separately classified, so the speeches appear in the explorer before they contribute to macro-topic charts. Legacy collection and classification tools remain under `src/pipeline`, `src/core` and `src/scripts`.
 
 ## Deployment and rollback
 

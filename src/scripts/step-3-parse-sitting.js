@@ -8,7 +8,6 @@
  * Exports: parseSitting(html, sittingId) → { topics, speeches, sections }
  */
 
-require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const {
@@ -55,6 +54,7 @@ async function run(htmlOrDate, sittingId, options = {}) {
 }
 
 if (require.main === module) {
+  require('dotenv').config();
   const dateIdx = process.argv.indexOf('--date');
   const date = dateIdx !== -1 && process.argv[dateIdx + 1] ? process.argv[dateIdx + 1] : null;
   const outIdx = process.argv.indexOf('--out');

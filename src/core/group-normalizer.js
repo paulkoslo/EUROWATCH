@@ -17,7 +17,10 @@ const fs = require('fs');
 
 // Database connection (same DB as rest of app)
 const { DB_PATH } = require('./db');
-const db = new sqlite3.Database(DB_PATH);
+let connection;
+function getDb() {
+  return connection ??= new sqlite3.Database(DB_PATH);
+}
 
 // Canonical political groups (ONLY these are valid political groups)
 const CANONICAL_GROUPS = {
@@ -575,6 +578,7 @@ function normalizePoliticalGroup(rawText) {
  * Add new columns to database if they don't exist
  */
 async function ensureColumns() {
+  const db = getDb();
   return new Promise((resolve, reject) => {
     db.serialize(() => {
       // Check existing columns
@@ -634,6 +638,7 @@ async function ensureColumns() {
  * Analyze and normalize all political groups
  */
 async function analyzeAndNormalize(options = {}) {
+  const db = getDb();
   const { apply = false, overwriteLegacy = false, limit = null, fromId = null } = options;
 
   return new Promise((resolve, reject) => {
@@ -759,6 +764,7 @@ async function analyzeAndNormalize(options = {}) {
  * Apply normalizations to database
  */
 async function applyNormalizations(mappings, overwriteLegacy = false) {
+  const db = getDb();
   return new Promise((resolve, reject) => {
     db.serialize(() => {
       db.run('BEGIN TRANSACTION');
@@ -1034,7 +1040,7 @@ async function main() {
     console.error('❌ [MAIN] Error:', error);
     process.exit(1);
   } finally {
-    db.close();
+    connection?.close();
   }
 }
 
