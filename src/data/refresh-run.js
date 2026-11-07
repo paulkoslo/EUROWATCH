@@ -11,7 +11,7 @@ const {
   prepare,
   promote,
 } = require("./dataset");
-const { importSittings, lastClosedDate } = require("./plenary-import");
+const { importSittings, isDate, lastClosedDate } = require("./plenary-import");
 const { close, get, open, run } = require("./sqlite");
 
 const project = path.resolve(__dirname, "../..");
@@ -94,12 +94,23 @@ async function runRefresh({
     start ||= new Date(Date.parse(baseline.release.stats.toDate) + 86400000)
       .toISOString()
       .slice(0, 10);
+    const yesterday = lastClosedDate();
+    const through = end || yesterday;
     emit("start", "Starting a local data refresh.", {
       start,
-      end: end || lastClosedDate(),
+      end: through,
       baselineId: baseline.release.id,
       logFile,
     });
+    if (
+      !isDate(start) ||
+      !isDate(through) ||
+      through > yesterday ||
+      (end && start > through)
+    )
+      throw new Error(
+        "Use a valid inclusive --start/--end range ending before today in Brussels.",
+      );
     try {
       unlock = await lockfile.lock(workspace, { stale: 120000 });
     } catch (error) {
@@ -112,7 +123,7 @@ async function runRefresh({
     const selected = await refreshDirectory(workspace, baseline.directory);
     current =
       selected === baseline.directory ? baseline : await loadDataset(selected);
-    if (!end && start > lastClosedDate())
+    if (start > through)
       return emit("complete", "No new sitting dates to check yet.", {
         directory: current.directory,
         datasetId: current.release.id,
@@ -135,7 +146,7 @@ async function runRefresh({
     emit("import", "Checking Parliament’s sitting calendar…");
     const result = await importSittings({
       start,
-      end,
+      end: through,
       filename,
       request,
       log: (message) => emit("import", message),

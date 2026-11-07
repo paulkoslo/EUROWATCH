@@ -125,3 +125,18 @@ test("the refresh CLI prints and saves the same run events", async (t) => {
   assert.equal(events[1].datasetId, options.baseline.id);
   assert.equal(await fs.readFile(events[0].logFile, "utf8"), stdout);
 });
+
+test("an invalid refresh date fails before staging is created", async (t) => {
+  const options = await fixture(t);
+  await assert.rejects(
+    runRefresh({ ...options, start: "2099-99-99" }),
+    /valid inclusive/,
+  );
+  const workspace = refreshWorkspace(
+    options.workspaceRoot,
+    options.baseline.id,
+  );
+  await assert.rejects(fs.access(path.join(workspace, "staging.db")), {
+    code: "ENOENT",
+  });
+});

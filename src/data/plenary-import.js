@@ -282,4 +282,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { importSittings, lastClosedDate };
+module.exports = { importSittings, isDate, lastClosedDate };
