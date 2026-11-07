@@ -52,6 +52,10 @@ test("archive migration preserves IDs and labels and rebuilds a public release",
     );
     await run(
       migrated,
+      "UPDATE speech_enrichment SET outcome='failed',macro_topic='Rejected' WHERE speech_id=2",
+    );
+    await run(
+      migrated,
       "UPDATE individual_speeches SET macro_topic='Stale projection' WHERE id=1",
     );
   } finally {
@@ -72,6 +76,15 @@ test("archive migration preserves IDs and labels and rebuilds a public release",
         id: 1,
         macro_topic: "Climate &amp; energy",
       },
+    );
+    assert.equal(
+      (
+        await get(
+          dataset.db,
+          "SELECT macro_topic FROM individual_speeches WHERE id=2",
+        )
+      ).macro_topic,
+      null,
     );
     assert.equal(
       await get(

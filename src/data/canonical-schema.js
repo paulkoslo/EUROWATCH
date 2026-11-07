@@ -112,7 +112,7 @@ async function projectCanonical(db) {
       LEFT JOIN published_speech_enrichment s ON s.speech_id=i.id AND s.revision_id=p.revision_id
       LEFT JOIN speech_enrichment e ON e.speech_id=s.speech_id AND e.revision_id=s.revision_id
         AND e.model_version=s.model_version AND e.prompt_version=s.prompt_version
-        AND e.taxonomy_version=s.taxonomy_version
+        AND e.taxonomy_version=s.taxonomy_version AND e.outcome IN ('legacy','valid')
       WHERE ${differences};
     UPDATE individual_speeches AS i SET
       ${legacyEnrichmentFields.map((field) => `${field}=e.${field}`).join(", ")}
