@@ -305,10 +305,13 @@ async function promote(directory, pointer = path.resolve("data/current.json")) {
   }
 }
 
-async function currentDirectory(root) {
-  const pointer = path.join(root, "data/current.json");
+async function directoryFromPointer(pointer) {
   const current = JSON.parse(await fs.readFile(pointer, "utf8"));
   return path.resolve(path.dirname(pointer), current.directory);
+}
+
+function currentDirectory(root) {
+  return directoryFromPointer(path.join(root, "data/current.json"));
 }
 
 module.exports = {
@@ -316,6 +319,7 @@ module.exports = {
   loadDataset,
   promote,
   currentDirectory,
+  directoryFromPointer,
   metadata,
   migrate,
   normalizeTopic,

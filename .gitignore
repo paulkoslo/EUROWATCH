@@ -79,6 +79,7 @@ jspm_packages/
 # OS generated files
 .DS_Store
 /data/releases/
+/data/refresh-preview/
 /data/current
 /data/current.json
 /data/fixture/
