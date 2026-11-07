@@ -4,6 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { constants } = require("node:fs");
 const { randomUUID } = require("node:crypto");
+const { once } = require("node:events");
 const { createApp } = require("./app");
 const { currentDirectory, loadDataset, prepare } = require("../data/dataset");
 const { importSittings, lastClosedDate } = require("../data/plenary-import");
@@ -138,19 +139,27 @@ async function createLocalPreview({ directory, start, end, request }) {
 
 async function main() {
   const root = path.resolve(__dirname, "../..");
+  const port = Number(process.env.PORT || 4319);
+  if (!Number.isInteger(port) || port < 0 || port > 65535)
+    throw new Error("PORT must be an integer between 0 and 65535.");
   const preview = await createLocalPreview({
     directory: process.env.DATASET_DIR || (await currentDirectory(root)),
     start: process.env.LOCAL_REFRESH_START,
     end: process.env.LOCAL_REFRESH_END,
   });
-  const server = preview.app.listen(
-    Number(process.env.PORT || 4319),
-    "127.0.0.1",
-    () =>
-      console.log(
-        `Refresh preview at http://127.0.0.1:${server.address().port}`,
-      ),
-  );
+  const server = preview.app.listen(port, "127.0.0.1");
+  try {
+    await once(server, "listening");
+  } catch (error) {
+    await preview.close();
+    if (error.code === "EADDRINUSE")
+      throw new Error(
+        `Port ${port} is already in use. Open the existing preview or run PORT=0 npm run preview:refresh for a free port.`,
+        { cause: error },
+      );
+    throw error;
+  }
+  console.log(`Refresh preview at http://127.0.0.1:${server.address().port}`);
   const shutdown = () =>
     server.close(() => preview.close().catch(console.error));
   process.once("SIGINT", shutdown);

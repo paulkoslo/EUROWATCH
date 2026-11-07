@@ -4,10 +4,42 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const { once } = require("node:events");
+const { createServer } = require("node:net");
+const { execFile } = require("node:child_process");
+const { promisify } = require("node:util");
 const { setTimeout: delay } = require("node:timers/promises");
 const { createFixture } = require("./fixtures/create");
 const { hashFile, prepare } = require("../src/data/dataset");
 const { createLocalPreview } = require("../src/explorer/local-refresh");
+
+test("the preview CLI explains a port conflict without crashing", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "eurowatch-port-test-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const source = await createFixture(path.join(root, "source.db"));
+  const directory = path.join(root, "release");
+  await prepare({ source, output: directory, log() {} });
+  const occupied = createServer().listen(0, "127.0.0.1");
+  t.after(() => new Promise((resolve) => occupied.close(resolve)));
+  await once(occupied, "listening");
+  const port = occupied.address().port;
+  await assert.rejects(
+    promisify(execFile)(
+      process.execPath,
+      [require.resolve("../src/explorer/local-refresh")],
+      {
+        env: { ...process.env, DATASET_DIR: directory, PORT: String(port) },
+        timeout: 5000,
+      },
+    ),
+    (error) => {
+      assert.equal(error.code, 1);
+      assert.equal(error.stdout, "");
+      assert.match(error.stderr, new RegExp(`Port ${port} is already in use`));
+      assert.doesNotMatch(error.stderr, /TypeError/);
+      return true;
+    },
+  );
+});
 
 test("local button runs one import and switches the preview after validation", async (t) => {
   const root = await fs.mkdtemp(
