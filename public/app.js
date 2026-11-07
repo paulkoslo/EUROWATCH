@@ -1211,3 +1211,50 @@ document.addEventListener("click", (event) => {
 });
 window.addEventListener("popstate", () => render(true));
 render();
+
+async function enableLocalRefresh() {
+  if (!(await api("/api/localrun")).localrun) return;
+  const control = document.querySelector("#local-refresh");
+  const button = control.querySelector("button");
+  const status = control.querySelector('[role="status"]');
+  async function showProgress(job) {
+    button.disabled = true;
+    while (job.running) {
+      status.textContent = job.message;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      job = await api("/api/local-refresh");
+    }
+    status.textContent = job.message;
+    if (job.datasetId && snapshot?.id !== job.datasetId) {
+      snapshot = null;
+      await render();
+    }
+  }
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    status.textContent = "Starting refresh…";
+    try {
+      const response = await fetch("/api/local-refresh", {
+        method: "POST",
+        headers: { "X-EUROWATCH-Action": "refresh" },
+      });
+      const job = await response.json();
+      if (!response.ok) throw new Error(job.error);
+      await showProgress(job);
+    } catch (error) {
+      status.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+  control.hidden = false;
+  try {
+    await showProgress(await api("/api/local-refresh"));
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+enableLocalRefresh().catch(() => {});

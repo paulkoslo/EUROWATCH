@@ -104,7 +104,7 @@ function parseIndividualSpeeches(content, sittingId) {
   const lines = content.split('\n');
   let currentSpeech = null;
   let speechOrder = 0;
-  const partyPattern = /^(PPE|S&D|ECR|Renew|Verts\/ALE|ID|The Left|NI|ALDE)$/i;
+  const partyPattern = /^(PPE|S&D|ECR|Renew|Verts\/ALE|ID|The Left|NI|ALDE|PfE|ESN)$/i;
   const partyIndicators = ['on behalf of', 'au nom de', 'a nome del', 'en nombre del', 'im Namen der', 'fraktion', 'gruppo', 'grupo', 'group', 'groupe', 'εξ ονόματος', 'namens', 'w imieniu', 'în numele', 'for ', 'för ', 'thar ceann', 'u ime', 'za skupinu', 'em nome', "(PPE)", "(S&D)", "(ECR)", "(Renew)", "(Verts/ALE)", "(ID)", "(The Left)", "(NI)", "(ALDE)"];
 
   for (let i = 0; i < lines.length; i++) {
