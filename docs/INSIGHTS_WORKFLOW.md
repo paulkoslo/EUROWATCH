@@ -57,3 +57,19 @@ node src/insights/cli.js pilot --input corpus.json --output pilot.json --provide
 ```
 
 Only explicit `--provider openai` reads `OPENAI_API_KEY`. Budget reservations conservatively use UTF-8 input bytes plus protocol overhead and the maximum output tokens. Reported usage/cost is distinct from reserved cost; prices are operator-supplied estimates, so use a provider project spending limit as an additional billing control. No credential or paid-provider call is part of tests. No evaluation or live AI quality claim has been established by fixture tests.
+
+## Historical backfill and recovery
+
+Backfill is a separate explicit command, never triggered by a normal data refresh. Use the reviewed taxonomy/prompt/model configuration from the pilot and reconcile held-out quality before promotion:
+
+```
+node src/insights/cli.js backfill --input corpus.json --checkpoint data/insights/backfill-v1 --output backfill.json --provider offline --responses responses.json --max-items 100
+```
+
+Live mode uses the same explicit provider and price flags as the pilot. `--budget` is the lifetime reservation ceiling for that checkpoint, including all prior failed and interrupted attempts; it does not reset each invocation. Each response is validated and atomically persisted as a versioned object before the next item. The append-only, fsynced `events.jsonl` reserves spending before a call and retains compact attempt/outcome events. `latest-report.json` contains coverage and exceptions by term/language/kind. The configured batch limit bounds new attempts, while completed candidates and uncertain results are reused without a provider call. Review uncertain records explicitly; changing a version creates a separate candidate, preserving the original.
+
+Rerun the same command to resume. A failure is retained until `--retry-failed true`; interrupted attempts without an output also require that flag. Both reserve additional budget. A process crash leaves `writer.lock`: verify that its `owner.json` PID/job is no longer running, then remove only that lock directory. A damaged ledger fails closed; recover it from trusted storage, never delete spend history to force a restart. Only one writer may use a checkpoint. Hosted jobs must hydrate and durably upload this private checkpoint using the hosted service's existing single-writer mechanism; ephemeral local checkpoints alone do not survive compute replacement.
+
+Only the named input snapshot's result versions appear in a report; prior source/enrichment versions remain in `objects/`. The publisher can read a reviewed report's `results`, join `recordId` and `inputRevision` to canonical records, reject stale revisions, then rebuild labels, charts, CSV and briefings together. Never overwrite legacy labels or promote `publicationAllowed: false` automatically. Counts distinguish candidate, uncertain, failed, skipped and interrupted records; candidate coverage is not reviewed coverage. `reportedCostUsd` summarizes available usage for this snapshot, while `reservedUsd` includes unsuccessful/unknown-cost attempts across the entire checkpoint.
+
+Run offline verification with `node --test test/insights-pilot.test.js test/insights-backfill.test.js`. The tests exercise replay, revision invalidation, budget exhaustion, failure retry, interruption, batch continuation, exclusive writers and corrupt-ledger rejection. A production pilot, human quality review, full-corpus spend/runtime estimate and unattended release verification remain operator gates.

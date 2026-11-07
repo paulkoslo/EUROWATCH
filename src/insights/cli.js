@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { pilot, selectSample, evaluate } = require("./pilot");
 const { openAIProvider, offlineProvider } = require("./provider");
+const { backfill } = require("./backfill");
 
 function read(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
@@ -51,18 +52,24 @@ async function main(argv) {
   const input = read(opts.input);
   if (command === "evaluate")
     return write(opts.output, evaluate(input, read(opts.reviews)));
-  if (command !== "pilot") throw new Error("Command must be pilot or evaluate");
+  if (!["pilot", "backfill"].includes(command))
+    throw new Error("Command must be pilot, evaluate or backfill");
   let records = input.records;
   if (opts.from)
     records = records.filter((r) => r.effectiveAt.slice(0, 10) >= opts.from);
   if (opts.to)
     records = records.filter((r) => r.effectiveAt.slice(0, 10) <= opts.to);
   if (opts.sample) records = selectSample(records, Number(opts.sample));
-  const report = await pilot({
+  const runner = command === "backfill" ? backfill : pilot;
+  const report = await runner({
     ...input,
     records,
     provider: providerFor(opts, input.config),
     budgetUsd: Number(opts.budget || 0),
+    checkpoint: opts.checkpoint,
+    maxItems: Number(opts["max-items"] || 100),
+    retryFailed: opts["retry-failed"] === "true",
+    onEvent: (event) => process.stderr.write(JSON.stringify(event) + "\n"),
   });
   write(opts.output, report);
 }
