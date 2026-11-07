@@ -22,7 +22,7 @@ For a smaller snapshot, add `--from 2020-01-01` and a new output directory. Do n
 4. In **Settings → Build**, set **Build Command** to `npm run build:render` once the commit that defines it is on the deployed branch. It compiles the locked SQLite addon against Render's Debian libraries and verifies it can load before uploading the build. The existing inline command below performs the same steps.
 5. In **Settings → Deploy**, use `npm start` as **Start Command** and leave **Pre-Deploy Command** blank. Render's pre-deploy step uses a separate instance and does not carry file changes into the deployed service.
 6. After saving the build command, use **Manual Deploy → Clear build cache & deploy**.
-7. Verify `/readyz`, the dataset ID and cutoff, then exercise sittings, speakers, filtered topics and CSV downloads. Measure latency and memory on the actual instance before selecting its final size.
+7. Verify `/readyz` returns the `datasetId` from the uploaded manifest and `analyticsAvailable: true`. Check the cutoff in `/api/data-status`, then exercise sittings, speakers, filtered topics and CSV downloads. Measure latency and memory on the actual instance before selecting its final size.
 
 ```sh
 npm_config_build_from_source=sqlite3 npm ci --omit=dev && node -e "require('sqlite3')"

@@ -120,7 +120,13 @@ test(
         if (match) resolve(`http://127.0.0.1:${match[1]}`);
       });
     });
-    assert.equal((await fetch(address + "/readyz")).status, 200);
+    const ready = await fetch(address + "/readyz");
+    assert.equal(ready.status, 200);
+    assert.deepEqual(await ready.json(), {
+      ready: true,
+      datasetId: dataset.release.id,
+      analyticsAvailable: true,
+    });
     const stopped = new Promise((resolve) => child.once("exit", resolve));
     child.kill("SIGTERM");
     assert.equal(await stopped, 0);
