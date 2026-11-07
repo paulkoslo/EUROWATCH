@@ -104,6 +104,8 @@ See [project structure](docs/PROJECT_STRUCTURE.md), the [initial audit](docs/AUD
 
 ## Offline maintenance
 
+For a temporary browser refresh, run `npm run preview:refresh` with development dependencies installed and open [localhost:4319](http://localhost:4319). The **Check New Sittings** button updates a temporary preview copy, starting after the selected snapshot's last sitting. Use `DATASET_DIR` to select the starting snapshot, or use the currently promoted local release. The preview listens on loopback and discards its temporary copies when stopped. Use the staging and release commands below to publish an updated dataset.
+
 Use Node from `.nvmrc` and install the maintenance dependencies with `npm ci`. Preview an import without opening a database. March 8 was a Sunday and March 9 was a plenary sitting.
 
 ```sh

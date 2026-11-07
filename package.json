@@ -7,6 +7,7 @@
   "engines": { "node": ">=22.13.0 <23 || >=24" },
   "scripts": {
     "start": "node server.js",
+    "preview:refresh": "node src/explorer/local-refresh.js",
     "test": "node --test test/*.test.js",
     "lint": "eslint .",
     "format:check": "prettier --check server.js src/explorer src/data src/scripts/dataset.js test public/index.html public/app.js public/style.css eslint.config.mjs",

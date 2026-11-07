@@ -803,6 +803,14 @@ nav a[aria-current="page"] {
   font-size: 0.85rem;
   color: var(--eu-gray-600);
 }
+#local-refresh:not([hidden]) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  flex-basis: 100%;
+  order: 1;
+}
 main {
   min-height: 55vh;
   padding-top: 20px;
