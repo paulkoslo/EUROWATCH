@@ -337,7 +337,7 @@ async function importSittings({
             speeches: transcript.speeches.length,
           });
         } else {
-          detector ??= await createDetector();
+          detector ??= await createDetector({ useCld3: !updateRevisions });
           const outcome = await storeSitting(
             db,
             sitting,
@@ -378,7 +378,7 @@ async function importSittings({
     return result;
   } finally {
     try {
-      detector?.cld3.dispose();
+      detector?.cld3?.dispose();
     } finally {
       if (db) await close(db);
     }

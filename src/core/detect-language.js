@@ -4,7 +4,6 @@
  * Does not assume English; detects and stores the detected code or NULL when uncertain.
  */
 
-const { loadModule } = require('cld3-asm');
 const franc = require('franc').franc;
 const langs = require('langs');
 
@@ -107,7 +106,7 @@ function voteCLD3(cld3, text) {
 }
 
 function detectWithFranc(text) {
-  const lang3 = franc(text, { whitelist: EU_3CODES, minLength: 20 });
+  const lang3 = franc(text, { only: EU_3CODES, minLength: 20 });
   if (!lang3 || lang3 === 'und') return null;
   const iso2 = iso3ToIso2Upper(lang3);
   if (!iso2) return null;
@@ -120,6 +119,8 @@ function decideLanguage(detectors, raw) {
 
   const script = scriptHeuristic(text);
   if (script) return script;
+
+  if (!detectors.cld3) return detectWithFranc(text);
 
   const cldOne = detectWithCLD3(detectors.cld3, text);
   if (cldOne && cldOne.conf >= CLD3_MIN_PROB) return cldOne;
@@ -163,7 +164,9 @@ function ensureLanguageColumn(db) {
  * Create detector (load CLD3). Call once before processing many texts.
  * @returns {Promise<{ cld3: object }>}
  */
-async function createDetector() {
+async function createDetector({ useCld3 = true } = {}) {
+  if (!useCld3) return {};
+  const { loadModule } = require('cld3-asm');
   const cldFactory = await loadModule();
   const cld3 = cldFactory.create();
   return { cld3 };
