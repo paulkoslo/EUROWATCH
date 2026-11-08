@@ -4,6 +4,7 @@ const { createHash, randomUUID, timingSafeEqual } = require("node:crypto");
 
 const runPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 const digest = (value) => createHash("sha256").update(value).digest();
+const QUEUE_TIMEOUT_MS = 15 * 60_000;
 const uuid = (value) => typeof value === "string" && runPattern.test(value);
 
 function renderLauncher({ serviceId, apiKey, request = fetch }) {
@@ -48,7 +49,8 @@ function createUpdateControl({ storage, launch, password, logger = console }) {
     if (
       ["queued", "running"].includes(report.status) &&
       (!held(lease) || lease.value.runId !== report.runId) &&
-      Date.now() - Date.parse(report.startedAt) > 120_000
+      Date.now() - Date.parse(report.startedAt) >
+        (report.status === "queued" ? QUEUE_TIMEOUT_MS : 120_000)
     )
       return { ...report, status: "interrupted" };
     return report;
@@ -139,7 +141,7 @@ function createUpdateControl({ storage, launch, password, logger = console }) {
           {
             runId,
             phase: "queued",
-            expiresAt: new Date(Date.now() + 120_000).toISOString(),
+            expiresAt: new Date(Date.now() + QUEUE_TIMEOUT_MS).toISOString(),
           },
           { expectedETag: lease?.etag ?? null },
         );

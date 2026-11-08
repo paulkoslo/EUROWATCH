@@ -113,6 +113,24 @@ async function matchSpeeches(db, sittingId, speeches) {
     const row = speech.officialId && byOfficialId.get(speech.officialId);
     return unmatched.delete(row) ? row.id : null;
   });
+  const newCounts = new Map();
+  for (const [index, speech] of speeches.entries()) {
+    if (matches[index]) continue;
+    const key = speechKey(speech.speaker_name, speech.speech_content);
+    newCounts.set(key, (newCounts.get(key) || 0) + 1);
+  }
+  for (const [key, count] of newCounts) {
+    const oldCount = (byText.get(key) || []).filter((row) =>
+      unmatched.has(row),
+    ).length;
+    if (oldCount && count !== oldCount && Math.max(count, oldCount) > 1)
+      throw Object.assign(
+        new Error(
+          "A revised transcript changed the count of identical contributions.",
+        ),
+        { outcome: "ambiguous_revision" },
+      );
+  }
   for (const [index, speech] of speeches.entries()) {
     if (matches[index]) continue;
     const exact = (
