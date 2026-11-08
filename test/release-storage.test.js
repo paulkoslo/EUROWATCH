@@ -218,3 +218,62 @@ test("private reports require compare-and-swap and paginate separately from rele
     /size limit/,
   );
 });
+test("shared update leases require CAS and report listing returns latest first with an explicit scan bound", async (t) => {
+  const { storage, client } = await setup(t);
+  assert.equal(await storage.readLease(), null);
+  const first = await storage.writeLease(
+    { runId: "first", expiresAt: "2026-11-08T01:00:00Z" },
+    { expectedETag: null },
+  );
+  await assert.rejects(
+    storage.writeLease(
+      { runId: "second", expiresAt: "2026-11-08T02:00:00Z" },
+      { expectedETag: null },
+    ),
+    { code: "RELEASE_CONFLICT" },
+  );
+  const second = await storage.writeLease(
+    { runId: "second", expiresAt: "2026-11-08T02:00:00Z" },
+    { expectedETag: first.etag },
+  );
+  assert.deepEqual(await storage.readLease(), second);
+  await assert.rejects(
+    storage.writeLease(
+      { runId: "bad", expiresAt: "never" },
+      { expectedETag: second.etag },
+    ),
+    /expiry/,
+  );
+  const original = client.send.bind(client);
+  client.send = async (command) =>
+    command.constructor.name === "ListObjectsV2Command"
+      ? {
+          Contents: [
+            {
+              Key: "eurowatch/private/runs/aaa.json",
+              LastModified: new Date("2026-11-08"),
+            },
+            {
+              Key: "eurowatch/private/runs/zzz.json",
+              LastModified: new Date("2026-11-07"),
+            },
+          ],
+        }
+      : original(command);
+  const page = await storage.listRunReports({ limit: 1 });
+  assert.equal(page.items[0].runId, "aaa");
+  assert.equal(
+    (
+      await storage.listRunReports({
+        limit: 1,
+        continuationToken: page.nextToken,
+      })
+    ).items[0].runId,
+    "zzz",
+  );
+  client.send = async () => ({
+    Contents: Array.from({ length: 1000 }, (_, i) => ({ Key: `${i}.json` })),
+    NextContinuationToken: "more",
+  });
+  await assert.rejects(storage.listRunReports(), { code: "REPORT_SCAN_LIMIT" });
+});

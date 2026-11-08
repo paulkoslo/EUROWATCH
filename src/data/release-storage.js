@@ -489,12 +489,10 @@ function createReleaseStorage({
             b.Key.localeCompare(a.Key),
         );
       return {
-        items: reports
-          .slice(offset, offset + limit)
-          .map((item) => ({
-            runId: path.posix.basename(item.Key, ".json"),
-            lastModified: item.LastModified,
-          })),
+        items: reports.slice(offset, offset + limit).map((item) => ({
+          runId: path.posix.basename(item.Key, ".json"),
+          lastModified: item.LastModified,
+        })),
         nextToken:
           offset + limit < reports.length ? String(offset + limit) : null,
       };
@@ -512,6 +510,13 @@ function createReleaseStorageFromEnv(env = process.env) {
   )
     throw new Error("Release storage endpoint must use HTTPS.");
   const client = new s3.S3Client({
+    maxAttempts: 2,
+    requestHandler: {
+      connectionTimeout: 10000,
+      socketTimeout: 120000,
+      requestTimeout: 120000,
+      throwOnRequestTimeout: true,
+    },
     region: env.RELEASE_REGION || "us-east-1",
     endpoint: env.RELEASE_ENDPOINT || undefined,
     forcePathStyle: env.RELEASE_FORCE_PATH_STYLE === "1",
