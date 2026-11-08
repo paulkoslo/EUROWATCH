@@ -4,6 +4,7 @@ const path = require("node:path");
 const { createReleaseStorageFromEnv } = require("./src/data/release-storage");
 const { createReleaseManager } = require("./src/data/release-manager");
 const { createApp } = require("./src/explorer/app");
+const { openPilotWatchlists } = require("./src/insights/pilot-access");
 const { createUpdateControlFromEnv } = require("./src/explorer/update-control");
 
 async function start() {
@@ -41,17 +42,37 @@ async function start() {
       process.env.DATASET_DIR || (await currentDirectory(__dirname));
     source = await loadDataset(directory);
   }
+  const insightsOrigin =
+    process.env.PUBLIC_SITE_URL ||
+    process.env.RENDER_EXTERNAL_URL ||
+    "http://127.0.0.1";
+  let watchlists;
+  try {
+    watchlists = await openPilotWatchlists(source, insightsOrigin);
+  } catch (error) {
+    await source.close();
+    throw error;
+  }
+  const closeAll = async () => {
+    try {
+      await watchlists?.close();
+    } finally {
+      await source.close();
+    }
+  };
   const app = createApp(source, {
     fullDownload: process.env.ENABLE_FULL_DATASET_DOWNLOAD !== "0",
     trustProxy: process.env.TRUST_PROXY === "1",
     updateControl,
+    insightsOrigin,
+    watchlistRouter: watchlists?.router,
   });
   const port = Number(process.env.PORT || 3000),
     host =
       process.env.HOST ||
       (process.env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1");
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
-    await source.close();
+    await closeAll();
     throw new Error("PORT must be between 0 and 65535.");
   }
   const server = app.listen(port, host, () =>
@@ -66,7 +87,7 @@ async function start() {
     if (stopping) return;
     stopping = true;
     server.close(async () => {
-      await source.close();
+      await closeAll();
       process.exitCode = 0;
     });
     server.closeIdleConnections();
@@ -79,7 +100,7 @@ async function start() {
   process.once("SIGINT", stop);
   server.once("error", async (error) => {
     console.error(error.message);
-    await source.close();
+    await closeAll();
     process.exitCode = 1;
   });
   server.once("close", () => {

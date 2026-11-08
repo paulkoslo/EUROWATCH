@@ -254,6 +254,7 @@ function home() {
         link("Parliament Sittings", "/?view=sittings", "button", true),
         link("Speakers", "/?view=speakers", "button", true),
         link("Descriptive Analytics", "/?view=topics", "button", true),
+        link("Parliament briefings", "/briefings", "button", true),
         link("Full Data Download", "/?view=download", "button secondary", true),
       ),
     ),

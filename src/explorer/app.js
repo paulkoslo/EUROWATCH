@@ -5,6 +5,8 @@ const { all } = require("../data/sqlite");
 const params = require("./params");
 const queries = require("./queries");
 const { officialMemberships } = require("../data/mep-roster");
+const { createInsightsRouter } = require("../insights/router");
+const { readReviewedPublication } = require("../insights/release");
 
 const fields = {
   id: "i.id",
@@ -51,6 +53,8 @@ function createApp(
     trustProxy = false,
     logger = console,
     updateControl,
+    insightsOrigin = "http://127.0.0.1",
+    watchlistRouter,
   } = {},
 ) {
   const app = express();
@@ -110,6 +114,24 @@ function createApp(
       }
     });
   }
+  if (watchlistRouter) app.use("/pilot", limiter(), watchlistRouter);
+  app.use(
+    ["/briefings", "/feed.xml", "/newsletter.txt", "/api/insights", "/mcp"],
+    limiter(),
+  );
+  app.use(
+    createInsightsRouter({
+      publicOrigin: insightsOrigin,
+      async getPublication(id, req) {
+        req.beginDatasetWork();
+        try {
+          return await readReviewedPublication(req.dataset.db, id);
+        } finally {
+          req.endDatasetWork();
+        }
+      },
+    }),
+  );
   get("/healthz", (req, res) => res.json({ status: "ok" }));
   get("/readyz", (req, res) =>
     res.json({

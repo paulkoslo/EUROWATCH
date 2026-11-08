@@ -126,6 +126,8 @@ async function projectCanonical(db) {
     DROP TABLE sitting_sources;
     DROP TABLE source_revisions;
     DROP TABLE source_records;
+    DROP TABLE IF EXISTS private_insight_editions;
+    DROP TABLE IF EXISTS private_insight_reviews;
     DROP TABLE canonical_migrations;
   `,
   );
