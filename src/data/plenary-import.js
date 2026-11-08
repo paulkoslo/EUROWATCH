@@ -68,11 +68,20 @@ function nameKey(name) {
   return name.trim().replace(/\s+/g, " ").normalize("NFC").toLowerCase();
 }
 
-async function speakerIndex(db) {
+async function speakerIndex(db, hosted) {
+  const hasOfficialProfiles =
+    hosted &&
+    (await get(
+      db,
+      "SELECT 1 FROM sqlite_schema WHERE name='official_mep_new_profiles'",
+    ));
+  const identity = hasOfficialProfiles
+    ? "CASE WHEN id IN (SELECT person_id FROM official_mep_new_profiles) THEN NULL ELSE id END"
+    : "id";
   const speakers = new Map();
   for (const { id, label } of await all(
     db,
-    "SELECT id, label FROM meps WHERE label IS NOT NULL",
+    `SELECT ${identity} AS id, label FROM meps WHERE label IS NOT NULL`,
   )) {
     const key = nameKey(label);
     if (key) speakers.set(key, speakers.has(key) ? null : id);
@@ -164,7 +173,7 @@ async function storeSitting(
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET speaker_name=excluded.speaker_name,
           political_group=excluded.political_group,title=excluded.title,speech_content=excluded.speech_content,
-          speech_order=excluded.speech_order,mep_id=excluded.mep_id,topic=excluded.topic,
+          speech_order=excluded.speech_order,topic=excluded.topic,
           language=excluded.language,political_group_raw=excluded.political_group_raw,
           political_group_std=excluded.political_group_std,political_group_kind=excluded.political_group_kind,
           political_group_reason=excluded.political_group_reason
@@ -248,7 +257,7 @@ async function importSittings({
         canonical = Boolean(await canonicalVersion(db));
         if (updateRevisions && !canonical)
           throw new Error("Hosted refresh requires a canonical checkpoint.");
-        speakers = await speakerIndex(db);
+        speakers = await speakerIndex(db, updateRevisions);
       }
     }
 

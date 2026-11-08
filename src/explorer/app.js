@@ -4,6 +4,7 @@ const { once } = require("node:events");
 const { all } = require("../data/sqlite");
 const params = require("./params");
 const queries = require("./queries");
+const { officialMemberships } = require("../data/mep-roster");
 
 const fields = {
   id: "i.id",
@@ -188,6 +189,12 @@ function createApp(
       await queries.speaker(req.dataset, params.speakerId(req.params.id)),
     ),
   );
+  get("/api/speakers/:id/affiliations", async (req, res) => {
+    const id = params.speakerId(req.params.id);
+    await queries.speaker(req.dataset, id);
+    const official = await officialMemberships(req.dataset.db, id);
+    res.json({ official });
+  });
   get("/api/speakers/:id/speeches", async (req, res) => {
     const id = params.speakerId(req.params.id);
     await queries.speaker(req.dataset, id);

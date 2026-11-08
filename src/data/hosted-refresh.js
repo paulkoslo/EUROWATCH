@@ -7,6 +7,7 @@ const { loadDataset, prepare } = require("./dataset");
 const { canonicalVersion } = require("./canonical-schema");
 const { archiveSnapshot } = require("./archive-migration");
 const { close, open } = require("./sqlite");
+const { syncMepRoster } = require("./mep-roster");
 const { importSittings, isDate, lastClosedDate } = require("./plenary-import");
 const { createReleaseStorageFromEnv } = require("./release-storage");
 
@@ -175,6 +176,7 @@ async function runHosted({
   end = lastClosedDate(),
   request,
   importData = importSittings,
+  rosterSync = syncMepRoster,
   workRoot = os.tmpdir(),
   log = console.log,
   sourcePreference = "docx",
@@ -350,7 +352,35 @@ async function runHosted({
         );
       }
     }
-    if (!result.imported && !result.revised) {
+    let rosterChanged = false;
+    if (rosterSync) {
+      try {
+        const roster = await rosterSync(filename, {
+          date: end,
+          dates: result.items
+            .filter((item) => ["imported", "revised"].includes(item.outcome))
+            .map((item) => item.date),
+          onEvent: (item) =>
+            reporter.event("roster", `MEP ${item.personId} ${item.outcome}`, {
+              item,
+            }),
+        });
+        rosterChanged = Boolean(
+          roster.inserted || roster.changed || roster.linkedSpeeches,
+        );
+        await event(
+          "roster",
+          "Checked the official MEP roster and dated memberships.",
+          { roster },
+        );
+      } catch {
+        await event(
+          "roster",
+          "The official roster could not be synchronized. Transcript data was verified separately.",
+        );
+      }
+    }
+    if (!result.imported && !result.revised && !rosterChanged) {
       await savePending(pendingDates);
       report.status = "unchanged";
       await event(

@@ -190,6 +190,7 @@ test("shared update job publishes twice, replays unchanged and preserves the pre
       request,
       workRoot: root,
       sourcePreference: "html",
+      rosterSync: null,
       log,
       ...options,
     });
