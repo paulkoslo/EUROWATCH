@@ -74,6 +74,7 @@ async function prepare({
   output,
   from = null,
   refresh,
+  releaseId = crypto.randomUUID(),
   log = console.log,
 }) {
   source = path.resolve(source);
@@ -110,7 +111,7 @@ async function prepare({
         );
         await exec(
           db,
-          "DELETE FROM speeches WHERE NOT EXISTS (SELECT 1 FROM sittings s WHERE s.id=speeches.id); DELETE FROM sittings_cache;",
+          "DELETE FROM speeches WHERE NOT EXISTS (SELECT 1 FROM sittings s WHERE s.id=speeches.id); DELETE FROM sittings_cache; DROP TABLE IF EXISTS public_insights;",
         );
         await exec(db, "COMMIT");
       } catch (error) {
@@ -187,7 +188,7 @@ async function prepare({
       "INSERT INTO topics SELECT topic,SUM(count) FROM topic_series GROUP BY topic; COMMIT",
     );
     const release = {
-      id: crypto.randomUUID(),
+      id: releaseId,
       schemaVersion: SCHEMA_VERSION,
       preparedAt: new Date().toISOString(),
       stats,

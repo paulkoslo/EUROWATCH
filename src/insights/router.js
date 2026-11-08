@@ -42,16 +42,20 @@ function createInsightsRouter({ getPublication, getDatasetId, publicOrigin }) {
     throw new Error("getPublication required");
   const allowedOrigin = new URL(publicOrigin).origin;
   const router = express.Router();
-  async function snapshot(id) {
+  async function snapshot(req, id) {
     if (id && !/^[a-f0-9]{64}$/.test(id)) return null;
-    const publication = await getPublication(id);
+    const publication = await getPublication(id, req);
     if (!publication) return null;
     const { publicationId, ...content } = publication;
     if (hash(content) !== publicationId || (id && id !== publicationId))
       throw new Error("Publication integrity mismatch");
     // Historical URLs retain their own release identity. Current views must be
     // synchronized to the active downloadable/API dataset by the integration.
-    if (!id && getDatasetId && publication.releaseId !== (await getDatasetId()))
+    if (
+      !id &&
+      getDatasetId &&
+      publication.releaseId !== (await getDatasetId(req))
+    )
       return null;
     return publication;
   }
@@ -63,7 +67,7 @@ function createInsightsRouter({ getPublication, getDatasetId, publicOrigin }) {
       "Cache-Control": "no-cache",
     });
   router.get("/api/insights", async (req, res) => {
-    const p = await snapshot();
+    const p = await snapshot(req);
     if (!p) return res.sendStatus(503);
     try {
       headers(res, p).json(
@@ -85,8 +89,16 @@ function createInsightsRouter({ getPublication, getDatasetId, publicOrigin }) {
       "/briefings/:publicationId/:slug",
     ],
     async (req, res) => {
-      const p = await snapshot(req.params.publicationId);
-      if (!p) return res.sendStatus(req.params.publicationId ? 404 : 503);
+      const p = await snapshot(req, req.params.publicationId);
+      if (!p) {
+        if (req.params.publicationId) return res.sendStatus(404);
+        return res
+          .status(200)
+          .type("html")
+          .send(
+            '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>EUROWATCH briefings</title><link rel="stylesheet" href="/style.css"><main class="container"><p><a href="/">EUROWATCH explorer</a></p><h1>Parliament briefings</h1><p>No reviewed briefings have been published yet.</p></main></html>',
+          );
+      }
       const entries = req.params.slug
         ? p.entries.filter((e) => e.slug === req.params.slug)
         : p.entries;
@@ -94,7 +106,7 @@ function createInsightsRouter({ getPublication, getDatasetId, publicOrigin }) {
       headers(res, p)
         .set(
           "Content-Security-Policy",
-          "default-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+          "default-src 'none'; style-src 'self'; base-uri 'none'; frame-ancestors 'none'",
         )
         .type("html")
         .send(html(p, entries));
@@ -104,8 +116,8 @@ function createInsightsRouter({ getPublication, getDatasetId, publicOrigin }) {
     ["/feed.xml", "application/rss+xml", rss],
     ["/newsletter.txt", "text/plain", newsletterText],
   ])
-    router.get(route, async (_req, res) => {
-      const p = await snapshot();
+    router.get(route, async (req, res) => {
+      const p = await snapshot(req);
       if (!p) return res.sendStatus(503);
       headers(res, p).type(type).send(render(p));
     });
@@ -222,6 +234,7 @@ function createInsightsRouter({ getPublication, getDatasetId, publicOrigin }) {
     )
       return error(-32602, "Invalid briefing identity");
     const p = await snapshot(
+      req,
       name === "get_briefing" ? args.publicationId : undefined,
     );
     if (!p)
