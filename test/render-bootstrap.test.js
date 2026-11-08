@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const fs = require("node:fs/promises");
+const { writeFileSync } = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { createFixture } = require("./fixtures/create");
@@ -90,4 +91,19 @@ test("a configured path takes precedence and a missing or corrupt source leaves 
     ),
     { code: "ENOENT" },
   );
+});
+
+test("a manual pointer selected during preparation wins", async (t) => {
+  const root = await workspace(t);
+  await createFixture(path.join(root, "data", "ep_data.db"));
+  const pointer = path.join(root, "data", "current.json");
+  const result = await resolveStartupDataset(root, env, (message) => {
+    if (message.startsWith("Preparing the existing"))
+      writeFileSync(
+        pointer,
+        JSON.stringify({ directory: "manual-release", id: "manual" }),
+      );
+  });
+  assert.equal(result, path.join(root, "data", "manual-release"));
+  assert.equal(JSON.parse(await fs.readFile(pointer)).id, "manual");
 });

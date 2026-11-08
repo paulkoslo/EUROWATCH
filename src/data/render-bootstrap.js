@@ -36,7 +36,7 @@ async function bootstrapArchive(root, log) {
   const unlock = await lockfile.lock(data, {
     lockfilePath: path.join(data, "render-bootstrap.lock"),
     stale: 20_000,
-    retries: { retries: 10, factor: 1, minTimeout: 2500 },
+    retries: { retries: 48, factor: 1, minTimeout: 2500 },
   });
   try {
     const selected = await existingDirectory(root);
@@ -64,7 +64,15 @@ async function bootstrapArchive(root, log) {
         await fs.rm(staging, { recursive: true, force: true });
       }
     }
-    const id = await promote(output, pointer);
+    let id;
+    try {
+      id = await promote(output, pointer, { replace: false });
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      const selected = await existingDirectory(root);
+      if (selected) return selected;
+      throw error;
+    }
     log(`Verified and selected Render release ${id} at ${output}.`);
     return output;
   } finally {
