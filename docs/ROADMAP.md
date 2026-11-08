@@ -75,10 +75,15 @@ Turn the reviewed plenary briefing into a weekly newsletter. Add procedure timel
 
 [Parliament's Legislative Observatory](https://oeil.europarl.europa.eu/oeil/en/find-out-more) · [Parliament reuse terms](https://www.europarl.europa.eu/legal-notice/en/home)
 
-## PR sequence
+## Review and deploy the stack
 
-1. Review the existing stack in order. [PR #3](https://github.com/paulkoslo/EUROWATCH/pull/3) checks the production build. [PR #4](https://github.com/paulkoslo/EUROWATCH/pull/4) extracts the local runner and preserves staging and logs.
-2. Add the schema and migration in a focused PR with a real-archive validation report and a reproducible command for the one-time seed.
-3. Add versioned release storage and automatic web pickup in a separate PR. Rehearse the migration and cutover on Render with the real archive.
-4. Add the private hosted button, scheduled job and retry view. Run the hosted release gate before declaring the cutover workflow complete.
-5. Deliver source coverage, the AI pilot and the historical backfill in follow-up PRs. Get an independent review and a test plan for each PR. The operator handles merging and deploying each step.
+Review the PRs in order. Each PR builds on the branch above it.
+
+1. [PR #3](https://github.com/paulkoslo/EUROWATCH/pull/3) verifies the Render build. [PR #4](https://github.com/paulkoslo/EUROWATCH/pull/4) extracts the local runner and preserves staging and logs. [PR #5](https://github.com/paulkoslo/EUROWATCH/pull/5) records the cutover plan.
+2. [PR #6](https://github.com/paulkoslo/EUROWATCH/pull/6) migrates the full archive and rebuilds the public release. [PR #7](https://github.com/paulkoslo/EUROWATCH/pull/7) reports source outcomes and corrects classification coverage.
+3. [PR #8](https://github.com/paulkoslo/EUROWATCH/pull/8) adds verified release storage and automatic pickup. [PR #9](https://github.com/paulkoslo/EUROWATCH/pull/9) adds the shared manual and scheduled hosted job. [PR #10](https://github.com/paulkoslo/EUROWATCH/pull/10) synchronizes official MEP profiles and membership dates.
+4. [PR #11](https://github.com/paulkoslo/EUROWATCH/pull/11) adds the cited pilot, legacy baseline and resumable historical enrichment. [PR #12](https://github.com/paulkoslo/EUROWATCH/pull/12) publishes reviewed editions and adds the API, feed, read-only MCP and private watchlist pilot. The final context PR adds selected procedures, committee documents and questions.
+
+The operator handles each merge and deployment. The archived input has been rehearsed locally. Follow the [hosted setup and acceptance checks](HOSTED_UPDATES.md) to verify the real disk, object storage, and first manual and scheduled releases. Use the [AI workflow](INSIGHTS_WORKFLOW.md) and [briefing runbook](PUBLIC_BRIEFINGS.md) for the live pilot, human evaluation and approved backfill. The public context feed starts with [selected official records](OFFICIAL_CONTEXT.md). Newsletter sending, billing and customer onboarding are operational follow-up after the pilot.
+
+Automated transcript and roster updates are independent of paid enrichment. Enable and evaluate a provider with a budget before scheduling additional paid work.
