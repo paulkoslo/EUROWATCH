@@ -75,13 +75,13 @@ async function speakerIndex(db, hosted) {
       db,
       "SELECT 1 FROM sqlite_schema WHERE name='official_mep_new_profiles'",
     ));
-  const exclude = hasOfficialProfiles
-    ? "AND id NOT IN (SELECT person_id FROM official_mep_new_profiles)"
-    : "";
+  const identity = hasOfficialProfiles
+    ? "CASE WHEN id IN (SELECT person_id FROM official_mep_new_profiles) THEN NULL ELSE id END"
+    : "id";
   const speakers = new Map();
   for (const { id, label } of await all(
     db,
-    `SELECT id, label FROM meps WHERE label IS NOT NULL ${exclude}`,
+    `SELECT ${identity} AS id, label FROM meps WHERE label IS NOT NULL`,
   )) {
     const key = nameKey(label);
     if (key) speakers.set(key, speakers.has(key) ? null : id);
