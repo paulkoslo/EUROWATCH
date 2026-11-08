@@ -45,7 +45,9 @@ function openAIProvider({
           body: JSON.stringify({
             model,
             messages: request.messages,
-            response_format: { type: "json_object" },
+            ...(request.jsonArray
+              ? {}
+              : { response_format: { type: "json_object" } }),
             max_completion_tokens: maxOutputTokens,
             store: false,
           }),
