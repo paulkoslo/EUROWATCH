@@ -33,6 +33,7 @@
     "bulk": "node src/pipeline/index.js --full",
     "demo-data": "node src/scripts/build-demo-data.js",
     "demo-data:full": "node src/scripts/build-demo-data.js --analytics",
+    "data:enrich:recent": "node src/insights/enrich-recent.js",
     "data:update:hosted": "node src/data/hosted-refresh.js",
     "dev": "turbo run dev --ui=tui --env-mode=loose",
     "dev:update": "turbo run update --filter=@eurowatch/data --env-mode=loose"

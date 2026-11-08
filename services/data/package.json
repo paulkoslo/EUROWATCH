@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "cd ../.. && npm run preview:refresh",
-    "update": "cd ../.. && npm run data:update:hosted"
+    "update": "cd ../.. && npm run data:update:hosted",
+    "enrich": "cd ../.. && npm run data:enrich:recent"
   }
 }

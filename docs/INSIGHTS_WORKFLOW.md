@@ -89,3 +89,13 @@ The last command walks the full archive in monthly batches. Supply the explicit 
 
 
 Rerun the original agenda-only prompt against the same sample using `node src/insights/legacy-baseline.js --input sample.json --taxonomy legacy-labels.json --output baseline.json`. The taxonomy file is a frozen JSON array of the original labels. Use a separate checkpoint, explicit provider, budget and prices for a paid baseline. Original archived labels remain available for comparison. For a live briefing pilot, export `--kinds debate,sitting` and set `--max-items` to cover your chosen sample size.
+
+## Follow newly published source revisions
+
+After the pilot and held-out review, run the same candidate pipeline against verified source changes. Give a private background worker a persistent disk for `--workspace`, read access to the shared release pointer and checkpoint, and its own AI credential. Its first check covers the last 14 calendar days of stored data. Later checks compare official source fingerprints, so a corrected older transcript also comes back into scope. The worker retains completed candidates, spending reservations and progress across restarts.
+
+```sh
+npm run data:enrich:recent -- --config /private/insight-config.json --workspace /var/data/enrichment
+```
+
+This command checks one release with the provider disabled. After approving the model and taxonomy, add `--watch true` and the same explicit OpenAI provider, budget and price flags used for the pilot. The worker checks every 900 seconds by default. Allow room for two canonical checkpoint files while replacing the local copy. Use a separate workspace when switching from an offline response fixture to a live provider. The worker prepares private candidates. Reviewed publication still uses the approval workflow in [Public briefings](PUBLIC_BRIEFINGS.md).

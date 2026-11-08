@@ -87,6 +87,7 @@ async function corpusBackfill({
       reservedUsd: 0,
       reportedCostUsd: 0,
       spendHalted: false,
+      incomplete: false,
       coverage: {},
       diagnostics: 0,
     };
@@ -160,6 +161,7 @@ async function corpusBackfill({
           aggregate.coverage[key][status] =
             (aggregate.coverage[key][status] || 0) + count;
       }
+      aggregate.incomplete ||= !summary.complete;
       if (
         aggregate.attempts >= maxItems ||
         aggregate.spendHalted ||

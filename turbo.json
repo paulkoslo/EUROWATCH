@@ -2,6 +2,7 @@
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
     "dev": { "cache": false, "persistent": true },
-    "update": { "cache": false }
+    "update": { "cache": false },
+    "enrich": { "cache": false }
   }
 }
