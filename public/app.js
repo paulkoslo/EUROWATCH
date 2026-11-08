@@ -493,9 +493,10 @@ async function speakerView(query, signal) {
       limit: "20",
       offset: query.get("speechOffset") || "0",
     });
-    const [speaker, result] = await Promise.all([
+    const [speaker, result, affiliations] = await Promise.all([
       api(`/api/speakers/${encoded(id)}`, signal),
       api(`/api/speakers/${encoded(id)}/speeches?${filters}`, signal),
+      api(`/api/speakers/${encoded(id)}/affiliations`, signal),
     ]);
     return node(
       "div",
@@ -517,6 +518,25 @@ async function speakerView(query, signal) {
           ? "This speaker record came from the Parliament API. Affiliation labels below belong to individual speech records; they are not a current membership profile."
           : "This identity is inferred or unresolved. Raw speech labels are preserved; this record is not a verified MEP profile.",
       ),
+      affiliations.official?.memberships.length
+        ? node(
+            "details",
+            { class: "panel" },
+            node("summary", {}, "Official membership history"),
+            node(
+              "ul",
+              {},
+              affiliations.official.memberships.map((membership) =>
+                node(
+                  "li",
+                  {},
+                  `${membership.organizationId} · ${membership.start} to ${membership.end || "present"}`,
+                ),
+              ),
+            ),
+            link("Parliament source", affiliations.official.sourceUrl),
+          )
+        : null,
       speechList(result),
       pageNav(result.meta, "speechOffset"),
     );

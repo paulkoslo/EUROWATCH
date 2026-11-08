@@ -7,6 +7,7 @@ const { loadDataset, prepare } = require("./dataset");
 const { canonicalVersion } = require("./canonical-schema");
 const { archiveSnapshot } = require("./archive-migration");
 const { close, open } = require("./sqlite");
+const { syncMepRoster } = require("./mep-roster");
 const { importSittings, isDate, lastClosedDate } = require("./plenary-import");
 const { createReleaseStorageFromEnv } = require("./release-storage");
 
@@ -175,6 +176,7 @@ async function runHosted({
   end = lastClosedDate(),
   request,
   importData = importSittings,
+  rosterSync = syncMepRoster,
   workRoot = os.tmpdir(),
   log = console.log,
   sourcePreference = "docx",
@@ -358,6 +360,27 @@ async function runHosted({
         "No changed records. The current release is still active.",
       );
       return report;
+    }
+    if (rosterSync) {
+      try {
+        const roster = await rosterSync(filename, {
+          date: end,
+          onEvent: (item) =>
+            reporter.event("roster", `MEP ${item.personId} ${item.outcome}`, {
+              item,
+            }),
+        });
+        await event(
+          "roster",
+          "Checked the official MEP roster and dated memberships.",
+          { roster },
+        );
+      } catch {
+        await event(
+          "roster",
+          "The official roster could not be synchronized. Transcript data was verified separately.",
+        );
+      }
     }
     const output = path.join(work, "release");
     await event("prepare", "Rebuilding the public archive and analytics.");
