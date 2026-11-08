@@ -222,7 +222,8 @@ async function runHosted({
     const cursor = await storage.readPendingDates();
     const previouslyPending = [
       ...new Set([
-        ...(cursor?.value?.dates ?? manifest.refresh?.pendingDates ?? []),
+        ...(cursor?.value?.dates ?? []),
+        ...(manifest.refresh?.pendingDates ?? []),
       ]),
     ].filter(isDate);
     report.previousReleaseId = manifest.id;
@@ -327,24 +328,30 @@ async function runHosted({
       throw new Error(
         `${result.failed} sitting records failed. The current release is still active.`,
       );
+    const resolved = new Set(
+      result.items
+        .filter((item) =>
+          ["existing", "imported", "revised"].includes(item.outcome),
+        )
+        .map((item) => item.date),
+    );
     const pendingDates = [
       ...new Set([
-        ...previouslyPending.filter((date) =>
-          dates ? !dates.includes(date) : date < start || date > end,
-        ),
+        ...previouslyPending.filter((date) => !resolved.has(date)),
         ...report.pendingDates,
       ]),
     ].sort();
-    if (
-      JSON.stringify(cursor?.value.dates ?? []) !== JSON.stringify(pendingDates)
-    ) {
-      await lease.assertHeld();
-      await storage.writePendingDates(
-        { dates: pendingDates },
-        { expectedETag: cursor?.etag ?? null },
-      );
+    async function savePending(next) {
+      if (JSON.stringify(cursor?.value.dates ?? []) !== JSON.stringify(next)) {
+        await lease.assertHeld();
+        await storage.writePendingDates(
+          { dates: next },
+          { expectedETag: cursor?.etag ?? null },
+        );
+      }
     }
     if (!result.imported && !result.revised) {
+      await savePending(pendingDates);
       report.status = "unchanged";
       await event(
         "complete",
@@ -373,6 +380,16 @@ async function runHosted({
     );
     report.releaseId = publicRef.id;
     report.status = "published";
+    try {
+      await savePending(pendingDates);
+    } catch {
+      // The manifest carries additions and a stale private cursor only repeats
+      // extra work. Do not describe a committed release as a failed publication.
+      reporter.event(
+        "cursor",
+        "The pending-date cursor will be reconciled on the next run.",
+      );
+    }
     await event("complete", `Published release ${publicRef.id}.`);
     return report;
   } catch (error) {
