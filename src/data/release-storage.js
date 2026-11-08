@@ -451,6 +451,12 @@ function createReleaseStorage({
     readLaunch(runId) {
       return getJson(key(`private/launches/${identifier(runId)}.json`));
     },
+    readPendingDates() {
+      return getJson(key("private/pending-sittings.json"));
+    },
+    writePendingDates(value, { expectedETag } = {}) {
+      return putJson(key("private/pending-sittings.json"), value, expectedETag);
+    },
     readLease() {
       return getJson(key("private/update-lease.json"));
     },

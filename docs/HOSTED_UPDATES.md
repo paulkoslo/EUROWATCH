@@ -5,7 +5,7 @@ The web service reads verified releases from the configured object store. A Rend
 ## Seed once
 
 1. Use the verified full archive and the commands in [Archive migration](ARCHIVE_MIGRATION.md) to prepare the canonical checkpoint and public release. If those files are on Render already, seed from that host. Allow space for the working archive, output and temporary data.
-2. Configure a private S3 bucket with the settings in [Release storage](RELEASE_STORAGE.md). Give the cron job write access to release, checkpoint, lease and run report keys. Give the web app read access to public release objects, the current pointer and the operator report and lease keys. The web operator also needs write access to the lease, queued run reports and launch receipts. Keep the bucket private.
+2. Configure a private S3 bucket with the settings in [Release storage](RELEASE_STORAGE.md). Give the cron job write access to release, checkpoint, lease, pending sitting and run report keys. Give the web app read access to public release objects, the current pointer and the operator report and lease keys. The web operator also needs write access to the lease, queued run reports and launch receipts. Keep the bucket private.
 3. With the storage credentials and settings available, publish the matching pair once.
 
 ```sh

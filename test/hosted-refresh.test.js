@@ -44,6 +44,8 @@ function fakeStorage(root) {
       await options.beforeCommit?.();
       return write("current", value, options);
     },
+    readPendingDates: () => read("pending"),
+    writePendingDates: (value, opts) => write("pending", value, opts),
     readLease: () => read("lease"),
     writeLease: (value, options) => write("lease", value, options),
     readRunReport: (id) => read(id),

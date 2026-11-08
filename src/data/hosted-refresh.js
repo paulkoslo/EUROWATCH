@@ -219,6 +219,12 @@ async function runHosted({
     if (!current?.value?.checkpoint)
       throw new Error("Seed the release storage before running updates.");
     const { manifest } = await storage.inspectRelease(current.value);
+    const cursor = await storage.readPendingDates();
+    const previouslyPending = [
+      ...new Set([
+        ...(cursor?.value?.dates ?? manifest.refresh?.pendingDates ?? []),
+      ]),
+    ].filter(isDate);
     report.previousReleaseId = manifest.id;
     report.releaseId = manifest.id;
     let dates;
@@ -253,7 +259,7 @@ async function runHosted({
     } else {
       start ||= [
         shift(manifest.stats.toDate, -HISTORY_DAYS),
-        ...(manifest.refresh?.pendingDates || []),
+        ...previouslyPending,
       ]
         .filter(isDate)
         .sort()[0];
@@ -321,6 +327,23 @@ async function runHosted({
       throw new Error(
         `${result.failed} sitting records failed. The current release is still active.`,
       );
+    const pendingDates = [
+      ...new Set([
+        ...previouslyPending.filter((date) =>
+          dates ? !dates.includes(date) : date < start || date > end,
+        ),
+        ...report.pendingDates,
+      ]),
+    ].sort();
+    if (
+      JSON.stringify(cursor?.value.dates ?? []) !== JSON.stringify(pendingDates)
+    ) {
+      await lease.assertHeld();
+      await storage.writePendingDates(
+        { dates: pendingDates },
+        { expectedETag: cursor?.etag ?? null },
+      );
+    }
     if (!result.imported && !result.revised) {
       report.status = "unchanged";
       await event(
@@ -331,14 +354,6 @@ async function runHosted({
     }
     const output = path.join(work, "release");
     await event("prepare", "Rebuilding the public archive and analytics.");
-    const pendingDates = [
-      ...new Set([
-        ...(manifest.refresh?.pendingDates || []).filter((date) =>
-          dates ? !dates.includes(date) : date < start || date > end,
-        ),
-        ...report.pendingDates,
-      ]),
-    ].sort();
     await prepare({
       source: filename,
       output,
