@@ -148,7 +148,7 @@ test("failed, superseded or oversized candidates never replace current and leave
     1,
   );
   storage.inspectRelease = async () => ({ totalBytes: 20 * 1024 ** 3 });
-  await assert.rejects(manager.checkForUpdate(), /byte budget/);
+  await assert.rejects(manager.checkForUpdate(), /cache budget/);
   assert.equal(manager.dataset.release.id, refs[0].id);
 });
 test("shutdown during download cleans candidate and concurrent polls share one transfer", async (t) => {
@@ -260,4 +260,16 @@ test("explicit local fallback remains outside managed cache and private referenc
   assert.ok(!state.includes("secret"));
   const stillThere = await loadDataset(directory);
   await stillThere.close();
+});
+
+test("invalid cached state still recovers from remote", async (t) => {
+  const { options, refs } = await fixture(t);
+  await fs.mkdir(options.cacheDir, { recursive: true });
+  await fs.writeFile(path.join(options.cacheDir, "current.json"), "null");
+  const manager = await createReleaseManager(options);
+  try {
+    assert.equal(manager.dataset.release.id, refs[0].id);
+  } finally {
+    await manager.close();
+  }
 });

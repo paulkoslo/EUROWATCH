@@ -39,3 +39,5 @@ Every fetched release is fully validated before activation. The cache pointer is
 At startup, validated cached active/previous releases provide fallback when remote retrieval fails. If neither is valid, `DATASET_DIR` (or the existing local `data/current.json` directory) can supply an explicitly configured validated fallback. Without any valid release, startup fails. The next successful poll resumes automatic pickup. With no `RELEASE_BUCKET`, existing `DATASET_DIR`/local-pointer behavior is unchanged.
 
 Rollback publishes a retained release reference with the current ETag, and its matching private checkpoint when future updates should continue from that source. The web service picks it up on the next poll. Do not change a release directory in place. Public API responses contain database release metadata only; storage pointers, checkpoint keys and credentials stay private.
+
+On space-constrained disks, the cache may discard the older idle rollback copy before staging a candidate. The active verified release stays available throughout. Confirm room for at least two managed releases and any seed or fallback retained on the same disk.

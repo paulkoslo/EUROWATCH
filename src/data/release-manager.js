@@ -111,6 +111,8 @@ async function createReleaseManager({
     let state;
     try {
       state = JSON.parse(await fs.readFile(stateFile, "utf8"));
+      if (!state || typeof state !== "object" || Array.isArray(state))
+        throw new Error("Invalid cache state.");
     } catch (error) {
       if (error.code !== "ENOENT")
         logger.error(
@@ -161,15 +163,27 @@ async function createReleaseManager({
         candidate = await openRecord(previous.directory, reference);
       } else {
         const { totalBytes } = await storage.inspectRelease(reference);
-        if (
-          !Number.isSafeInteger(totalBytes) ||
-          totalBytes <= 0 ||
-          totalBytes + (await cachedBytes()) > maxCacheBytes
-        )
-          throw new Error("Release cache byte budget would be exceeded.");
-        const disk = await fs.statfs(cacheDir);
-        if (disk.bavail * disk.bsize < totalBytes + 64 * 1024 * 1024)
-          throw new Error("Insufficient free disk space for a staged release.");
+        if (!Number.isSafeInteger(totalBytes) || totalBytes <= 0)
+          throw new Error("Invalid staged release size.");
+        const diskReserve = 64 * 1024 * 1024;
+        async function fits() {
+          const disk = await fs.statfs(cacheDir);
+          return (
+            totalBytes + (await cachedBytes()) <= maxCacheBytes &&
+            disk.bavail * disk.bsize >= totalBytes + diskReserve
+          );
+        }
+        if (!(await fits()) && previous?.managed && !previous.refs) {
+          // The active verified release is the rollback during staging. Free an
+          // older, idle copy on small disks before trying to download again.
+          await persist(current, null);
+          previous = null;
+          await prune();
+        }
+        if (!(await fits()))
+          throw new Error(
+            "Insufficient disk space or cache budget for a staged release.",
+          );
         destination = directoryFor(reference);
         await storage.downloadRelease(reference, destination);
         candidate = await openRecord(destination, reference);
