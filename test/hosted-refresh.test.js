@@ -47,11 +47,14 @@ function fakeStorage(root) {
     readLease: () => read("lease"),
     writeLease: (value, options) => write("lease", value, options),
     readRunReport: (id) => read(id),
+    readLaunch: (id) => read("launch-" + id),
+    writeLaunch: (id, jobId) =>
+      write("launch-" + id, { jobId }, { expectedETag: null }),
     writeRunReport: write,
     async listRunReports() {
       return {
         items: [...current.keys()]
-          .filter((id) => id.includes("-"))
+          .filter((id) => id.includes("-") && !id.startsWith("launch-"))
           .map((runId) => ({ runId })),
       };
     },

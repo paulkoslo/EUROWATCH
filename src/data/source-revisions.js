@@ -110,16 +110,26 @@ async function matchSpeeches(db, sittingId, speeches) {
     byText.get(key).push(speech);
   }
   const matches = speeches.map((speech) => {
-    const exact =
-      byText.get(speechKey(speech.speaker_name, speech.speech_content)) || [];
-    const match =
-      (speech.officialId && byOfficialId.get(speech.officialId)) ||
-      (exact.length === 1
-        ? exact[0]
-        : exact.find((row) => row.speech_order === speech.speech_order));
-    if (!unmatched.delete(match)) return null;
-    return match.id;
+    const row = speech.officialId && byOfficialId.get(speech.officialId);
+    return unmatched.delete(row) ? row.id : null;
   });
+  for (const [index, speech] of speeches.entries()) {
+    if (matches[index]) continue;
+    const exact = (
+      byText.get(speechKey(speech.speaker_name, speech.speech_content)) || []
+    ).filter(
+      (row) =>
+        unmatched.has(row) &&
+        (!row.official_id ||
+          !speech.officialId ||
+          row.official_id === speech.officialId),
+    );
+    const match =
+      exact.length === 1
+        ? exact[0]
+        : exact.find((row) => row.speech_order === speech.speech_order);
+    if (unmatched.delete(match)) matches[index] = match.id;
+  }
 
   // Only use position for an edited contribution when the shape of the sitting
   // is unchanged and the remaining speaker at that position also matches.
@@ -127,8 +137,24 @@ async function matchSpeeches(db, sittingId, speeches) {
     const byOrder = new Map(
       [...unmatched].map((row) => [row.speech_order, row]),
     );
+    const frequency = (names) => {
+      const counts = new Map();
+      for (const value of names) {
+        const name = normalized(value);
+        counts.set(name, (counts.get(name) || 0) + 1);
+      }
+      return counts;
+    };
+    const oldNames = frequency([...unmatched].map((row) => row.speaker_name));
+    const newNames = frequency(
+      speeches
+        .filter((_, index) => !matches[index])
+        .map((speech) => speech.speaker_name),
+    );
     for (const [index, speech] of speeches.entries()) {
       if (matches[index]) continue;
+      const name = normalized(speech.speaker_name);
+      if (oldNames.get(name) !== 1 || newNames.get(name) !== 1) continue;
       const row = byOrder.get(speech.speech_order);
       if (
         !row ||
@@ -145,8 +171,9 @@ async function matchSpeeches(db, sittingId, speeches) {
     }
   }
   if (unmatched.size)
-    throw new Error(
-      "Transcript revision has unmatched existing contributions. Review its source and speaker alignment before publishing.",
+    throw Object.assign(
+      new Error("Transcript revision has unmatched existing contributions."),
+      { outcome: "ambiguous_revision" },
     );
   return matches;
 }

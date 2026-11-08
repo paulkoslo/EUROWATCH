@@ -41,6 +41,18 @@ function createUpdateControl({ storage, launch, password, logger = console }) {
     `Basic ${Buffer.from(`operator:${password}`).toString("base64")}`,
   );
   const router = express.Router();
+  const held = (lease) =>
+    lease && Date.parse(lease.value.expiresAt) > Date.now();
+  function currentReport(report, lease) {
+    if (!report) return null;
+    if (
+      ["queued", "running"].includes(report.status) &&
+      (!held(lease) || lease.value.runId !== report.runId) &&
+      Date.now() - Date.parse(report.startedAt) > 120_000
+    )
+      return { ...report, status: "interrupted" };
+    return report;
+  }
   router.use((req, res, next) => {
     res.set("Cache-Control", "no-store");
     res.set("X-Robots-Tag", "noindex");
@@ -60,12 +72,18 @@ function createUpdateControl({ storage, launch, password, logger = console }) {
   router.get("/runs", async (req, res) => {
     const { items } = await storage.listRunReports({ limit: 12 });
     const reports = await Promise.all(
-      items.map(({ runId }) => storage.readRunReport(runId)),
+      items.map(async ({ runId }) => {
+        const [report, launch] = await Promise.all([
+          storage.readRunReport(runId),
+          storage.readLaunch(runId),
+        ]);
+        return report && { ...report.value, jobId: launch?.value.jobId };
+      }),
     );
     const lease = await storage.readLease();
     res.json({
-      running: Boolean(lease && Date.parse(lease.value.expiresAt) > Date.now()),
-      runs: reports.filter(Boolean).map(({ value }) => value),
+      running: Boolean(held(lease)),
+      runs: reports.filter(Boolean).map((value) => currentReport(value, lease)),
     });
   });
   router.get("/runs/:runId", async (req, res) => {
@@ -74,7 +92,7 @@ function createUpdateControl({ storage, launch, password, logger = console }) {
     const report = await storage.readRunReport(req.params.runId);
     if (!report)
       return res.status(404).json({ error: "The run has not reported yet." });
-    res.json(report.value);
+    res.json(currentReport(report.value, await storage.readLease()));
   });
   router.post(
     "/runs",
@@ -94,13 +112,20 @@ function createUpdateControl({ storage, launch, password, logger = console }) {
       if (retryRunId !== undefined && !uuid(retryRunId))
         return res.status(400).json({ error: "Invalid retry run ID." });
       const lease = await storage.readLease();
-      if (lease && Date.parse(lease.value.expiresAt) > Date.now())
+      if (held(lease))
         return res.status(409).json({ error: "An update is already running." });
       if (retryRunId) {
-        const report = (await storage.readRunReport(retryRunId))?.value;
+        const report = currentReport(
+          (await storage.readRunReport(retryRunId))?.value,
+          lease,
+        );
         if (
           !report ||
-          (!(report.status === "failed" && report.start && report.end) &&
+          (!(
+            ["failed", "interrupted"].includes(report.status) &&
+            report.start &&
+            report.end
+          ) &&
             ![...report.failedDates, ...report.pendingDates].length)
         )
           return res
@@ -108,14 +133,49 @@ function createUpdateControl({ storage, launch, password, logger = console }) {
             .json({ error: "No sitting dates are available to retry." });
       }
       const runId = randomUUID();
+      let reservation;
       try {
+        reservation = await storage.writeLease(
+          {
+            runId,
+            phase: "queued",
+            expiresAt: new Date(Date.now() + 120_000).toISOString(),
+          },
+          { expectedETag: lease?.etag ?? null },
+        );
+      } catch (error) {
+        if (error.code === "RELEASE_CONFLICT")
+          return res
+            .status(409)
+            .json({ error: "An update is already queued." });
+        throw error;
+      }
+      try {
+        await storage.writeRunReport(
+          runId,
+          {
+            runId,
+            retryRunId,
+            trigger: retryRunId ? "retry" : "manual",
+            status: "queued",
+            startedAt: new Date().toISOString(),
+            events: [],
+            failedDates: [],
+            pendingDates: [],
+          },
+          { expectedETag: null },
+        );
         const jobId = await launch({ runId, retryRunId });
+        await storage.writeLaunch(runId, jobId);
         res.status(202).json({ runId, jobId });
       } catch (error) {
+        // A transport timeout can occur after Render accepted the launch. Keep
+        // its reservation until the worker claims it or the queued run expires.
         logger.error(`[data-update] ${error.message}`);
+        if (!reservation) throw error;
         res.status(502).json({
           error:
-            "Render could not start the update. Check the job settings and retry.",
+            "Render did not confirm the launch. Check the queued run or Render before retrying.",
         });
       }
     },

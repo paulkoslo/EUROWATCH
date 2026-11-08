@@ -33,19 +33,23 @@ async function launch(retryRunId) {
 
 function renderRun(run, busy) {
   const block = document.createElement("details");
-  block.open = run.status === "running" || run.status === "failed";
+  block.open =
+    run.status === "running" || ["failed", "interrupted"].includes(run.status);
   block.append(
     element("summary", `${run.startedAt} · ${run.trigger} · ${run.status}`),
   );
+  if (run.jobId) block.append(element("p", `Render job ${run.jobId}`));
   if (run.releaseId) block.append(element("p", `Release ${run.releaseId}`));
   if (
-    (run.status === "failed" && run.start && run.end) ||
+    (["failed", "interrupted"].includes(run.status) && run.start && run.end) ||
     run.failedDates.length ||
     run.pendingDates.length
   ) {
     const retry = element(
       "button",
-      run.status === "failed" ? "Retry this run" : "Retry these sittings",
+      ["failed", "interrupted"].includes(run.status)
+        ? "Retry this run"
+        : "Retry these sittings",
     );
     retry.disabled = busy;
     retry.addEventListener("click", () => launch(run.runId));

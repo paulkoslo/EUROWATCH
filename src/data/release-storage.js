@@ -441,6 +441,16 @@ function createReleaseStorage({
     readRunReport(runId) {
       return getJson(key(`private/runs/${identifier(runId)}.json`));
     },
+    writeLaunch(runId, jobId) {
+      return putJson(
+        key(`private/launches/${identifier(runId)}.json`),
+        { jobId: identifier(jobId) },
+        null,
+      );
+    },
+    readLaunch(runId) {
+      return getJson(key(`private/launches/${identifier(runId)}.json`));
+    },
     readLease() {
       return getJson(key("private/update-lease.json"));
     },
@@ -453,7 +463,11 @@ function createReleaseStorage({
         throw new Error("Lease requires an expiry timestamp.");
       return putJson(
         key("private/update-lease.json"),
-        { runId: value.runId, expiresAt: value.expiresAt },
+        {
+          runId: value.runId,
+          expiresAt: value.expiresAt,
+          phase: value.phase === "queued" ? "queued" : "running",
+        },
         expectedETag,
       );
     },

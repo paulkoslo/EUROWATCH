@@ -19,7 +19,12 @@ const shift = (date, days) =>
 
 async function claimLease(storage, runId) {
   const current = await storage.readLease();
-  if (current && Date.parse(current.value.expiresAt) > Date.now()) return null;
+  if (
+    current &&
+    (current.value.runId !== runId || current.value.phase !== "queued") &&
+    Date.parse(current.value.expiresAt) > Date.now()
+  )
+    return null;
   const renewal = () => ({
     runId,
     expiresAt: new Date(Date.now() + LEASE_MS).toISOString(),
@@ -74,8 +79,8 @@ async function claimLease(storage, runId) {
   };
 }
 
-function runReporter(storage, report, log) {
-  let etag = null;
+function runReporter(storage, report, log, previous) {
+  let etag = previous?.etag ?? null;
   let pending = Promise.resolve();
   let error;
   return {
@@ -177,7 +182,12 @@ async function runHosted({
     (start && (!isDate(start) || start > end))
   )
     throw new Error("Invalid update date range.");
+  const queued =
+    trigger === "scheduled" ? null : await storage.readRunReport(runId);
+  if (queued && queued.value.status !== "queued")
+    throw new Error("This run ID has already started.");
   const report = {
+    ...queued?.value,
     runId,
     trigger,
     retryRunId,
@@ -187,7 +197,7 @@ async function runHosted({
     failedDates: [],
     pendingDates: [],
   };
-  const reporter = runReporter(storage, report, log);
+  const reporter = runReporter(storage, report, log, queued);
   const event = (stage, message, details) => {
     reporter.event(stage, message, details);
     return reporter.persist();
@@ -213,7 +223,7 @@ async function runHosted({
       const previous = (await storage.readRunReport(retryRunId))?.value;
       if (!previous) throw new Error("The requested run report has expired.");
       if (
-        previous.status === "failed" &&
+        ["failed", "interrupted", "running"].includes(previous.status) &&
         isDate(previous.start) &&
         isDate(previous.end)
       ) {
