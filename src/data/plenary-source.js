@@ -1,4 +1,5 @@
 const axios = require("axios");
+const { createHash } = require("node:crypto");
 const { load } = require("cheerio");
 const { unzipSync } = require("fflate");
 const { getSessionNumber } = require("../core/parliament-fetch");
@@ -49,8 +50,13 @@ async function apiRows(get, resource, params) {
     headers: { Accept: "application/ld+json" },
     responseType: "json",
   });
-  if (!Array.isArray(result?.data))
-    throw new Error(`Unexpected Parliament API response for ${resource}`);
+  if (!Array.isArray(result?.data)) {
+    const error = new Error(
+      `Unexpected Parliament API response for ${resource}`,
+    );
+    error.outcome = "parser_error";
+    throw error;
+  }
   return result.data;
 }
 
@@ -155,24 +161,40 @@ function parseDocx(buffer, sittingId) {
     const paragraph = xml(element);
     const style = styles.get(paragraph.find("w\\:pStyle").attr("w:val"));
     const text = paragraph.find("w\\:t").text().trim();
-    if (style === "Contents_TOC") {
+    if (style === "Contents_TOC" || style === "Contents") {
       englishToc = /^EN\s*CONTENTS$/i.test(text);
     } else if (englishToc && style === "toc 1") {
       let title = "";
-      for (const element of paragraph.find("w\\:hyperlink > w\\:r")) {
+      for (const element of paragraph.find("w\\:r")) {
         const run = xml(element);
         if (run.find("w\\:tab").length) break;
         title += run.find("w\\:t").text();
       }
       const match = /^(\d+(?:\.\d+)*)\s*-\s*(.+)$/.exec(title);
       if (match) englishTitles.set(match[1], match[2]);
-    } else if (style === "Heading1Custom" || style === "Heading2Custom") {
+    } else if (
+      ["Heading1Custom", "Heading2Custom", "heading 1", "heading 2"].includes(
+        style,
+      )
+    ) {
       const match = /^(\d+(?:\.\d+)*)\s*\.\s*(.+)$/.exec(text);
-      const heading = englishTitles.get(match?.[1]) ?? match?.[2] ?? text;
+      // Older DOCX files put the agenda number in Word TC fields, not visible text.
+      const fields = paragraph.find("w\\:instrText").text();
+      const fieldNumbers = [
+        ...new Set(
+          [...fields.matchAll(/TC\s+"(\d+(?:\.\d+)*)\s*-\s*/g)].map(
+            (entry) => entry[1],
+          ),
+        ),
+      ];
+      if (fieldNumbers.length > 1)
+        throw new Error("DOCX heading has conflicting agenda numbers");
+      const number = match?.[1] ?? fieldNumbers[0];
+      const heading = englishTitles.get(number) ?? match?.[2] ?? text;
       const title = heading.replace(/\s*\([^)]*\)\s*$/, "").trim();
       if (title)
         sections.push({
-          heading: match ? `${match[1]}. ${heading}` : heading,
+          heading: number ? `${number}. ${heading}` : heading,
           title,
           lines: [],
         });
@@ -205,41 +227,125 @@ function parseDocx(buffer, sittingId) {
   };
 }
 
-async function fetchTranscript(sitting, get = request) {
-  const { date, documentId, published } = sitting;
-  const sittingId = `sitting-${date}`;
-  let htmlError;
-  try {
-    const content = await get(htmlUrl(documentId), { responseType: "text" });
-    return { ...parseHtml(content, sittingId), source: "html" };
-  } catch (error) {
-    htmlError = error.message;
-  }
-
-  try {
-    const records = await apiRows(get, `documents/${documentId}`);
-    const expectedPath = `/distribution/doc/${documentId}_mul.docx`;
-    const available = records
-      .flatMap((record) => record.is_realized_by ?? [])
-      .flatMap((realization) => realization.is_embodied_by ?? [])
-      .some(({ is_exemplified_by: url }) => {
-        return (
-          typeof url === "string" &&
-          new URL(url, DATA_ORIGIN).href === DATA_ORIGIN + expectedPath
-        );
-      });
-    if (!available) throw new Error("no multilingual DOCX distribution listed");
-    const buffer = await get(DATA_ORIGIN + expectedPath, {
-      responseType: "arraybuffer",
-    });
-    return { ...parseDocx(buffer, sittingId), source: "docx", htmlError };
-  } catch (error) {
-    if (!published && error.response?.status === 404)
-      return { source: "pending", htmlError };
-    throw new Error(`HTML: ${htmlError}; DOCX: ${error.message}`, {
-      cause: error,
-    });
-  }
+// Stable categories are safe to persist; upstream exception text may contain credentials.
+function sourceOutcome(error, phase) {
+  if (phase === "parse") return "parser_error";
+  const status = error.response?.status;
+  if (status === 401 || status === 403 || status === 429)
+    return "source_refusal";
+  if (status === 404) return "not_found";
+  return "network_error";
 }
 
-module.exports = { discoverSittings, fetchTranscript };
+async function fetchTranscript(
+  sitting,
+  get = request,
+  { preference = "html", only = false } = {},
+) {
+  if (!["html", "docx"].includes(preference))
+    throw new Error("Unknown transcript source preference");
+  const { documentId, published } = sitting;
+  const sittingId = `sitting-${sitting.date}`;
+  const readerUrl = htmlUrl(documentId);
+  const attempts = [];
+  const sources = only
+    ? [preference]
+    : [preference, preference === "html" ? "docx" : "html"];
+  for (const source of sources) {
+    let phase = "fetch";
+    let url = readerUrl;
+    const began = Date.now();
+    try {
+      let payload;
+      if (source === "html") {
+        payload = await get(url, { responseType: "text" });
+      } else {
+        url = `${DATA_ORIGIN}/api/v2/documents/${documentId}`;
+        const records = await apiRows(get, `documents/${documentId}`);
+        const expectedPath = `/distribution/doc/${documentId}_mul.docx`;
+        const available = records
+          .flatMap((record) => record.is_realized_by ?? [])
+          .flatMap((realization) => realization.is_embodied_by ?? [])
+          .some(
+            ({ is_exemplified_by: value }) =>
+              typeof value === "string" &&
+              new URL(value, DATA_ORIGIN).href === DATA_ORIGIN + expectedPath,
+          );
+        if (!available) {
+          const error = new Error("No official DOCX distribution listed");
+          error.outcome = "distribution_unavailable";
+          throw error;
+        }
+        url = DATA_ORIGIN + expectedPath;
+        payload = await get(url, { responseType: "arraybuffer" });
+      }
+      phase = "parse";
+      const parsed =
+        source === "html"
+          ? parseHtml(payload, sittingId)
+          : parseDocx(payload, sittingId);
+      attempts.push({
+        source,
+        url,
+        outcome: "available",
+        durationMs: Date.now() - began,
+      });
+      return {
+        ...parsed,
+        source,
+        readerUrl,
+        attempts,
+        payload,
+        provenance: {
+          sourceUrl: url,
+          format: source,
+          retrievedAt: new Date().toISOString(),
+          sha256: createHash("sha256")
+            .update(
+              typeof payload === "string" ? payload : Buffer.from(payload),
+            )
+            .digest("hex"),
+        },
+        htmlError: attempts.find(
+          (attempt) =>
+            attempt.source === "html" && attempt.outcome !== "available",
+        )?.outcome,
+      };
+    } catch (error) {
+      attempts.push({
+        source,
+        url,
+        outcome: error.outcome || sourceOutcome(error, phase),
+        ...(error.response?.status ? { status: error.response.status } : {}),
+        durationMs: Date.now() - began,
+      });
+    }
+  }
+  // A refused or broken published document must never be presented as awaiting publication.
+  const pending =
+    !published &&
+    attempts.every((attempt) =>
+      ["not_found", "distribution_unavailable"].includes(attempt.outcome),
+    );
+  if (pending)
+    return {
+      source: "pending",
+      readerUrl,
+      attempts,
+      htmlError: attempts.find((a) => a.source === "html")?.outcome,
+    };
+  const error = new Error(
+    attempts
+      .map((attempt) => `${attempt.source.toUpperCase()}: ${attempt.outcome}`)
+      .join("; "),
+  );
+  error.outcome =
+    attempts.find((attempt) => attempt.outcome === "parser_error")?.outcome ||
+    attempts.find((attempt) => attempt.outcome === "source_refusal")?.outcome ||
+    attempts.find((attempt) => attempt.outcome === "network_error")?.outcome ||
+    "distribution_unavailable";
+  error.attempts = attempts;
+  throw error;
+}
+
+module.exports = { discoverSittings, fetchTranscript, sourceOutcome };

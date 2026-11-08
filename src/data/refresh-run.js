@@ -67,6 +67,7 @@ async function runRefresh({
   start,
   end,
   request,
+  sourcePreference = "html",
   onEvent = () => {},
 }) {
   const baseline = await loadDataset(directory);
@@ -102,6 +103,8 @@ async function runRefresh({
       baselineId: baseline.release.id,
       logFile,
     });
+    if (!["html", "docx"].includes(sourcePreference))
+      throw new Error("Unknown transcript source preference");
     if (
       !isDate(start) ||
       !isDate(through) ||
@@ -149,6 +152,15 @@ async function runRefresh({
       end: through,
       filename,
       request,
+      sourcePreference,
+      onEvent: (event) =>
+        emit(
+          event.stage,
+          event.stage === "calendar"
+            ? "Reconciled the official sitting calendar."
+            : `${event.date}: ${event.outcome}`,
+          event,
+        ),
       log: (message) => emit("import", message),
     });
     const staging = await open(filename, { readonly: true });
@@ -225,6 +237,7 @@ async function main() {
       workspace: { type: "string" },
       start: { type: "string" },
       end: { type: "string" },
+      source: { type: "string" },
     },
   });
   const result = await runRefresh({
@@ -235,6 +248,7 @@ async function main() {
     workspaceRoot: values.workspace || process.env.LOCAL_REFRESH_WORKSPACE,
     start: values.start || process.env.LOCAL_REFRESH_START,
     end: values.end || process.env.LOCAL_REFRESH_END,
+    sourcePreference: values.source || process.env.PLENARY_SOURCE || "html",
     onEvent(event) {
       console.log(JSON.stringify(event));
       if (process.connected) process.send(event);

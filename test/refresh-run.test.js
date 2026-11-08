@@ -83,7 +83,7 @@ test("a partial refresh survives a retry and preserves both run reports", async 
     fs.readFile(path.join(workspace, "runs", `${id}.jsonl`), "utf8");
   assert.match(
     await report(partial.runId),
-    /2026-03-10 failed: .*simulated upstream timeout/,
+    /2026-03-10 failed: .*network_error/,
   );
   assert.match(
     await report(retry.runId),

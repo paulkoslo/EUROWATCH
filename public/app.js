@@ -218,10 +218,7 @@ function home() {
       [
         [number(stats.speeches), "Recorded speeches"],
         [number(stats.sittings), "Parliament sittings"],
-        [
-          `${stats.fromDate.slice(0, 4)}–${stats.toDate.slice(0, 4)}`,
-          "Dataset coverage",
-        ],
+        [dateLabel(stats.toDate), "Latest stored sitting"],
       ].map(([value, label]) =>
         node(
           "div",
@@ -231,6 +228,19 @@ function home() {
         ),
       ),
     ),
+    para(
+      snapshot.coverage?.lastSuccessfulRefresh
+        ? `Last successful refresh: ${dateLabel(snapshot.coverage.lastSuccessfulRefresh.slice(0, 10))}. Known gaps in the checked range: ${(snapshot.coverage.pendingDates || []).length} pending, ${(snapshot.coverage.failedDates || []).length} failed.`
+        : "Refresh history and calendar gaps are not recorded for this snapshot.",
+    ),
+    snapshot.coverage?.pendingDates?.length > 0 &&
+      para(
+        `Pending transcripts: ${snapshot.coverage.pendingDates.join(", ")}.`,
+      ),
+    snapshot.coverage?.failedDates?.length > 0 &&
+      para(
+        `Failed sitting imports: ${snapshot.coverage.failedDates.join(", ")}.`,
+      ),
     node(
       "section",
       { className: "panel" },
@@ -598,7 +608,7 @@ function chart(series) {
     svgNode(
       "desc",
       { id: "chart-description" },
-      "Line chart of the selected topic counts. Exact values and coverage are available in the data table below. Gaps indicate periods with no stored speeches.",
+      "Line chart of the selected topic counts. Exact values and coverage are available in the data table below. Gaps indicate periods with no topic classifications.",
     ),
   );
   const max = Math.max(
@@ -800,7 +810,7 @@ async function topicView(query, signal) {
       {},
       node("h2", {}, "What would you like to explore?"),
       para(
-        "Compare up to eight derived agenda topics. Counts refer to speeches stored in this snapshot.",
+        "Compare up to eight classified macro topics. Counts refer to classified speeches in this snapshot.",
         "muted small",
       ),
       node(
@@ -836,7 +846,7 @@ async function topicView(query, signal) {
     ),
     controls,
   );
-  if (!series.labels.length || !series.datasets.length) {
+  if (!series.labels.length) {
     content.append(
       message(
         "No data matches this selection. Choose at least one topic and a range within the snapshot.",
@@ -851,19 +861,35 @@ async function topicView(query, signal) {
       ...series.datasets.map((dataset) => dataset.label),
       "Stored speeches (all topics)",
       "Months observed",
+      "Classified speeches",
+      "Classification coverage",
     ],
     series.labels.map((label, i) => [
       label,
       ...series.datasets.map((dataset) =>
         dataset.data[i] == null
-          ? "No stored speeches"
+          ? "No classified speeches"
           : number(dataset.data[i]),
       ),
       number(series.coverage[i].coverage),
       `${series.coverage[i].observedMonths}/${series.coverage[i].months}`,
+      number(series.coverage[i].classified),
+      series.coverage[i].classificationRate == null
+        ? "No stored speeches"
+        : `${(series.coverage[i].classificationRate * 100).toFixed(1)}%${series.coverage[i].classificationRate < 1 ? " — partial" : ""}`,
     ]),
     "Topic counts and stored corpus coverage",
   );
+  if (!series.datasets.length) {
+    content.append(
+      message(
+        "No topic classifications match this selection. Stored speech coverage is shown below.",
+        "empty",
+      ),
+      dataTable,
+    );
+    return content;
+  }
   content.append(
     node(
       "section",
@@ -903,6 +929,10 @@ async function topicView(query, signal) {
         ),
       ),
       para(series.note, "chart-caption"),
+      para(
+        `${number(series.coverage.reduce((sum, period) => sum + period.classified, 0))} classified of ${number(series.coverage.reduce((sum, period) => sum + period.coverage, 0))} stored speeches in this range.`,
+        "chart-caption",
+      ),
       node(
         "details",
         { className: "series-table" },
@@ -1080,7 +1110,7 @@ async function dataView(query, signal) {
           "Macro topics are AI-derived categories of agenda headings, assigned to the speeches under those headings. They are not independent classifications of every speech’s argument.",
           `${number(stats.missingTopics)} speeches have no macro-topic label; ${number(stats.lowConfidenceTopics)} have low-confidence topic labels. Existing labels do not reliably record their model or classification run.`,
           "Language labels are automatically detected. They do not establish whether a text is an original speech or a translation. Raw group text and derived group labels are kept separate; neither is a verified membership history.",
-          "Topic charts count recorded speeches. Blank periods have no stored speeches. A quarterly or yearly total may include only some observed months; the table reports that coverage.",
+          "Topic charts count classified speeches. Blank periods have no topic classifications; zero means classified speeches exist but none match the selected topic. The table and CSV show stored and classified counts and partial coverage. Agenda headings alone are not topic classifications.",
         ].map((text) => node("li", {}, text)),
       ),
       node("h2", {}, "Download speech data"),

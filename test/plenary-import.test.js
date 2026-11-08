@@ -161,14 +161,19 @@ test("dry run distinguishes pending publication and does not open a database", a
       throw status(404);
     },
   });
-  assert.deepEqual(result, {
-    confirmed: 2,
-    imported: 0,
-    previewed: 1,
-    existing: 0,
-    pending: 1,
-    failed: 0,
-  });
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.entries(result).filter(([key]) => key !== "items"),
+    ),
+    {
+      confirmed: 2,
+      imported: 0,
+      previewed: 1,
+      existing: 0,
+      pending: 1,
+      failed: 0,
+    },
+  );
 });
 
 test("a failed sitting rolls back fully and a rerun fills the gap once", async (t) => {
@@ -263,4 +268,142 @@ test("a failed sitting rolls back fully and a rerun fills the gap once", async (
     importSittings(options),
     /Prepared releases are read-only/,
   );
+});
+
+test("DOCX preference avoids reader requests and retains original payload provenance", async () => {
+  const archive = zipSync({
+    "word/styles.xml": strToU8(
+      '<w:styles><w:style w:styleId="h"><w:name w:val="Heading1Custom"/></w:style><w:style w:styleId="s"><w:name w:val="Normal_1"/></w:style></w:styles>',
+    ),
+    "word/document.xml": strToU8(
+      '<w:document><w:body><w:p><w:pPr><w:pStyle w:val="h"/></w:pPr><w:r><w:t>1. Research</w:t></w:r></w:p><w:p><w:pPr><w:pStyle w:val="s"/></w:pPr><w:r><w:t>Ada Example (PPE). – Research matters.</w:t></w:r></w:p></w:body></w:document>',
+    ),
+  });
+  const result = await fetchTranscript(
+    { date, documentId: `CRE-10-${date}`, published: true },
+    async (url) => {
+      assert.ok(!url.endsWith(".html"));
+      if (url.endsWith(".docx")) return archive;
+      return {
+        data: [
+          {
+            is_realized_by: [
+              {
+                is_embodied_by: [
+                  {
+                    is_exemplified_by: `distribution/doc/CRE-10-${date}_mul.docx`,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+    },
+    { preference: "docx" },
+  );
+  assert.equal(result.source, "docx");
+  assert.equal(result.speeches.length, 1);
+  assert.match(result.readerUrl, /_EN.html$/);
+  assert.equal(
+    result.provenance.sha256,
+    require("node:crypto").createHash("sha256").update(archive).digest("hex"),
+  );
+  assert.deepEqual(result.payload, archive);
+});
+
+test("typed source failures distinguish refusal, parsing, network and pending publication without leaking error text", async () => {
+  const sitting = { date, documentId: `CRE-10-${date}`, published: false };
+  for (const [failure, expected] of [
+    [status(403), "source_refusal"],
+    [
+      Object.assign(new Error("secret-token-in-upstream-url"), {
+        code: "ETIMEDOUT",
+      }),
+      "network_error",
+    ],
+  ]) {
+    await assert.rejects(
+      fetchTranscript(sitting, async () => {
+        throw failure;
+      }),
+      (error) => {
+        assert.equal(error.outcome, expected);
+        assert.equal(error.attempts.length, 2);
+        assert.ok(!JSON.stringify(error.attempts).includes("secret-token"));
+        assert.ok(!error.message.includes("secret-token"));
+        return true;
+      },
+    );
+  }
+  await assert.rejects(
+    fetchTranscript(sitting, async () => "malformed", { only: true }),
+    (error) => error.outcome === "parser_error",
+  );
+  const pending = await fetchTranscript(sitting, async () => {
+    throw status(404);
+  });
+  assert.equal(pending.source, "pending");
+  await assert.rejects(
+    fetchTranscript({ ...sitting, published: true }, async () => {
+      throw status(404);
+    }),
+    (error) => error.outcome === "distribution_unavailable",
+  );
+});
+
+test("calendar reconciliation reports non-sitting days separately from pending expected sittings", async () => {
+  const events = [];
+  const result = await importSittings({
+    start,
+    end: date,
+    dryRun: true,
+    log() {},
+    onEvent: (event) => events.push(event),
+    request: async (url) => {
+      if (url.endsWith("/meetings"))
+        return { data: [meeting(date, { published: false })] };
+      throw status(404);
+    },
+  });
+  assert.equal(events[0].nonSittingDays, 1);
+  assert.deepEqual(events[0].expectedDates, [date]);
+  assert.equal(result.items[0].outcome, "pending_publication");
+  assert.equal(result.items[0].retryable, true);
+});
+
+test("older DOCX heading styles and TC agenda numbers preserve topic boundaries", async () => {
+  const archive = zipSync({
+    "word/styles.xml": strToU8(
+      '<w:styles><w:style w:styleId="h"><w:name w:val="heading 1"/></w:style><w:style w:styleId="s"><w:name w:val="Normal_1"/></w:style><w:style w:styleId="contents"><w:name w:val="Contents"/></w:style><w:style w:styleId="toc"><w:name w:val="toc 1"/></w:style></w:styles>',
+    ),
+    "word/document.xml": strToU8(
+      '<w:document><w:body><w:p><w:pPr><w:pStyle w:val="contents"/></w:pPr><w:r><w:t>ENCONTENTS</w:t></w:r></w:p><w:p><w:pPr><w:pStyle w:val="toc"/></w:pPr><w:r><w:t>1 - Research (debate)</w:t></w:r><w:r><w:tab/></w:r><w:r><w:t>27</w:t></w:r></w:p><w:p><w:pPr><w:pStyle w:val="h"/></w:pPr><w:r><w:instrText>TC "1 - Forschung"</w:instrText></w:r><w:r><w:t>Forschung</w:t></w:r></w:p><w:p><w:pPr><w:pStyle w:val="s"/></w:pPr><w:r><w:t>Ada Example (PPE). – Forschung ist wichtig.</w:t></w:r></w:p></w:body></w:document>',
+    ),
+  });
+  const result = await fetchTranscript(
+    { date, documentId: `CRE-9-${date}`, published: true },
+    async (url) =>
+      url.endsWith(".docx")
+        ? archive
+        : {
+            data: [
+              {
+                is_realized_by: [
+                  {
+                    is_embodied_by: [
+                      {
+                        is_exemplified_by: `distribution/doc/CRE-9-${date}_mul.docx`,
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+    { preference: "docx", only: true },
+  );
+  assert.equal(result.speeches[0].topic, "Research");
+  assert.equal(result.speeches[0].speech_content, "Forschung ist wichtig.");
+  assert.match(result.content, /1\. Research/);
 });

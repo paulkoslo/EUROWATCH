@@ -335,3 +335,62 @@ test("legacy bookmarks redirect and security headers prohibit third-party script
   );
   assert.equal((await fetch(base + "/api/missing")).status, 404);
 });
+
+test("classification coverage separates unclassified months, partial periods and true zero in API and CSV", async (t) => {
+  const { open, exec, close } = require("../src/data/sqlite");
+  const source = await createFixture(path.join(root, "coverage-source.db"));
+  const db = await open(source);
+  await exec(
+    db,
+    "UPDATE individual_speeches SET macro_topic=NULL WHERE sitting_id='sitting-2024-03-04' OR (sitting_id='sitting-2024-01-15' AND mep_id=2)",
+  );
+  await close(db);
+  const directory = path.join(root, "coverage-release");
+  await prepare({ source, output: directory, log() {} });
+  const snapshot = await loadDataset(directory);
+  const listener = createApp(snapshot).listen(0, "127.0.0.1");
+  await require("node:events").once(listener, "listening");
+  t.after(async () => {
+    await new Promise((resolve) => listener.close(resolve));
+    await snapshot.close();
+  });
+  const origin = `http://127.0.0.1:${listener.address().port}`;
+  const query =
+    "?from=2024-01&to=2024-03&topics=" +
+    encodeURIComponent('["Budget - oversight"]');
+  const series = await fetch(
+    origin + "/api/analytics/time-series" + query,
+  ).then((r) => r.json());
+  assert.deepEqual(series.datasets[0].data, [0, null, null]);
+  assert.deepEqual(
+    series.coverage.map((p) => [
+      p.coverage,
+      p.classified,
+      p.classificationRate,
+    ]),
+    [
+      [2, 1, 0.5],
+      [0, 0, null],
+      [2, 0, 0],
+    ],
+  );
+  const quarter = await fetch(
+    origin + "/api/analytics/time-series" + query + "&interval=quarter",
+  ).then((r) => r.json());
+  assert.equal(quarter.coverage[0].classificationRate, 0.25);
+  assert.equal(quarter.coverage[0].classifiedMonths, 1);
+  const csv = await fetch(origin + "/api/export/topics" + query).then((r) =>
+    r.text(),
+  );
+  assert.match(
+    csv,
+    /classified_speech_count,classification_rate,classified_months/,
+  );
+  assert.match(csv, /2024-01,0,2,1,1,1,0.5,1/);
+  assert.match(csv, /2024-03,,2,1,1,0,0,0/);
+  const emptySelection = await fetch(
+    origin + "/api/analytics/time-series?topics=[]&from=2024-01&to=2024-03",
+  ).then((r) => r.json());
+  assert.equal(emptySelection.coverage.length, 3);
+  assert.deepEqual(emptySelection.datasets, []);
+});
