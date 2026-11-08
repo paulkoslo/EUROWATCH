@@ -45,11 +45,17 @@ function limiter() {
 }
 function createApp(
   source,
-  { fullDownload = true, trustProxy = false, logger = console } = {},
+  {
+    fullDownload = true,
+    trustProxy = false,
+    logger = console,
+    updateControl,
+  } = {},
 ) {
   const app = express();
   app.disable("x-powered-by");
   if (trustProxy) app.set("trust proxy", 1);
+  if (updateControl) app.use("/operator", limiter(), updateControl);
   app.use((req, res, next) => {
     res.set({
       "X-Content-Type-Options": "nosniff",

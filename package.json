@@ -13,8 +13,8 @@
     "preview:refresh": "node src/explorer/local-refresh.js",
     "test": "node --test test/*.test.js",
     "lint": "eslint .",
-    "format:check": "prettier --check server.js src/explorer src/data src/scripts/dataset.js test public/index.html public/app.js public/style.css eslint.config.mjs",
-    "format": "prettier --write server.js src/explorer src/data src/scripts/dataset.js test public/index.html public/app.js public/style.css eslint.config.mjs",
+    "format:check": "prettier --check server.js src/explorer src/data src/scripts/dataset.js test private public/index.html public/app.js public/style.css eslint.config.mjs",
+    "format": "prettier --write server.js src/explorer src/data src/scripts/dataset.js test private public/index.html public/app.js public/style.css eslint.config.mjs",
     "check": "npm run lint && npm run format:check && npm test",
     "data:init": "node src/scripts/dataset.js init",
     "data:import": "node src/data/plenary-import.js",
@@ -32,27 +32,35 @@
     "step5": "node src/scripts/step-5-store-sitting.js",
     "bulk": "node src/pipeline/index.js --full",
     "demo-data": "node src/scripts/build-demo-data.js",
-    "demo-data:full": "node src/scripts/build-demo-data.js --analytics"
+    "demo-data:full": "node src/scripts/build-demo-data.js --analytics",
+    "data:update:hosted": "node src/data/hosted-refresh.js",
+    "dev": "turbo run dev --ui=tui --env-mode=loose",
+    "dev:update": "turbo run update --filter=@eurowatch/data --env-mode=loose"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1164.0",
     "dotenv": "^17.2.2",
     "express": "^5.3.0",
-    "sqlite3": "^6.0.1"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.39.5",
+    "sqlite3": "^6.0.1",
     "axios": "^1.21.0",
     "cheerio": "^1.0.0",
     "cld3-asm": "^4.0.0",
-    "cli-progress": "^3.12.0",
-    "eslint": "^9.39.5",
     "fflate": "^0.8.3",
     "franc": "^6.2.0",
+    "langs": "^2.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "cli-progress": "^3.12.0",
+    "eslint": "^9.39.5",
     "globals": "^17.0.0",
-    "langs": "^2.0.0",
     "openai": "^4.0.0",
     "prettier": "^3.0.0",
-    "proper-lockfile": "^4.1.2"
-  }
+    "proper-lockfile": "^4.1.2",
+    "turbo": "^2.0.0"
+  },
+  "packageManager": "npm@11.3.0",
+  "workspaces": [
+    "services/*"
+  ]
 }

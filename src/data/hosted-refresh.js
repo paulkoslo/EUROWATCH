@@ -3,7 +3,10 @@ const os = require("node:os");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { parseArgs } = require("node:util");
-const { prepare } = require("./dataset");
+const { loadDataset, prepare } = require("./dataset");
+const { canonicalVersion } = require("./canonical-schema");
+const { archiveSnapshot } = require("./archive-migration");
+const { close, open } = require("./sqlite");
 const { importSittings, isDate, lastClosedDate } = require("./plenary-import");
 const { createReleaseStorageFromEnv } = require("./release-storage");
 
@@ -107,12 +110,37 @@ function runReporter(storage, report, log) {
   };
 }
 
+async function verifySeed(directory, checkpoint) {
+  const db = await open(checkpoint, { readonly: true });
+  let release;
+  try {
+    if (!(await canonicalVersion(db)))
+      throw new Error("The seed checkpoint must come from data:migrate.");
+    release = await loadDataset(directory, { verifyHashes: true });
+    if (release.release.subsetFrom)
+      throw new Error("The hosted seed requires a full public release.");
+    const original = await archiveSnapshot(db);
+    const published = await archiveSnapshot(release.db);
+    if (JSON.stringify(original) !== JSON.stringify(published))
+      throw new Error(
+        "The seed checkpoint and public release contain different archive data.",
+      );
+  } finally {
+    try {
+      await release?.close();
+    } finally {
+      await close(db);
+    }
+  }
+}
+
 async function seedHosted({ storage, directory, checkpoint }) {
   const lease = await claimLease(storage, randomUUID());
   if (!lease) throw new Error("Another data update is running.");
   try {
     if (await storage.readCurrent())
       throw new Error("Release storage is already seeded.");
+    await verifySeed(directory, checkpoint);
     const [release, privateRef] = await Promise.all([
       storage.uploadRelease(directory),
       storage.uploadCheckpoint(checkpoint, randomUUID()),
@@ -181,17 +209,31 @@ async function runHosted({
     if (retryRunId) {
       const previous = (await storage.readRunReport(retryRunId))?.value;
       if (!previous) throw new Error("The requested run report has expired.");
-      dates = [...new Set([...previous.failedDates, ...previous.pendingDates])]
-        .filter(isDate)
-        .sort();
-      if (!dates.length)
-        throw new Error(
-          "That run has no recorded sitting dates to retry. Run an update again.",
-        );
-      if (dates.at(-1) > end)
-        throw new Error("The retry contains dates beyond the closed calendar.");
-      start = dates[0];
-      end = dates.at(-1);
+      if (
+        previous.status === "failed" &&
+        isDate(previous.start) &&
+        isDate(previous.end)
+      ) {
+        // A failed run never published its successful writes. Replay every
+        // input from that run so a later sitting cannot hide older discarded work.
+        ({ start, end, targetDates: dates } = previous);
+        if (end > lastClosedDate())
+          throw new Error("The retry extends beyond the closed calendar.");
+      } else {
+        dates = [
+          ...new Set([...previous.failedDates, ...previous.pendingDates]),
+        ]
+          .filter(isDate)
+          .sort();
+        if (!dates.length)
+          throw new Error("That run has no recorded sitting dates to retry.");
+        if (dates.at(-1) > end)
+          throw new Error(
+            "The retry contains dates beyond the closed calendar.",
+          );
+        start = dates[0];
+        end = dates.at(-1);
+      }
     } else {
       start ||= [
         shift(manifest.stats.toDate, -HISTORY_DAYS),
@@ -200,6 +242,7 @@ async function runHosted({
         .filter(isDate)
         .sort()[0];
     }
+    report.targetDates = dates;
     report.start = start;
     report.end = end;
     if (start > end) {
@@ -322,6 +365,7 @@ async function runHosted({
 }
 
 async function main() {
+  require("dotenv").config({ quiet: true });
   const { values } = parseArgs({
     options: {
       seed: { type: "boolean" },

@@ -98,7 +98,11 @@ function createUpdateControl({ storage, launch, password, logger = console }) {
         return res.status(409).json({ error: "An update is already running." });
       if (retryRunId) {
         const report = (await storage.readRunReport(retryRunId))?.value;
-        if (!report || ![...report.failedDates, ...report.pendingDates].length)
+        if (
+          !report ||
+          (!(report.status === "failed" && report.start && report.end) &&
+            ![...report.failedDates, ...report.pendingDates].length)
+        )
           return res
             .status(404)
             .json({ error: "No sitting dates are available to retry." });
@@ -109,12 +113,10 @@ function createUpdateControl({ storage, launch, password, logger = console }) {
         res.status(202).json({ runId, jobId });
       } catch (error) {
         logger.error(`[data-update] ${error.message}`);
-        res
-          .status(502)
-          .json({
-            error:
-              "Render could not start the update. Check the job settings and retry.",
-          });
+        res.status(502).json({
+          error:
+            "Render could not start the update. Check the job settings and retry.",
+        });
       }
     },
   );

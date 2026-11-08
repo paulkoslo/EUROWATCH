@@ -27,6 +27,7 @@ eurowatchtool.pub
 *.json
 !package.json
 !package-lock.json
+!/turbo.json
 !data/macro-topics.json
 !test/fixtures/*.json
 

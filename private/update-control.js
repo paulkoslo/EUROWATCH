@@ -1,4 +1,3 @@
-/* global document, fetch, setInterval */
 const status = document.querySelector("#status");
 const start = document.querySelector("#start");
 const runs = document.querySelector("#runs");
@@ -39,8 +38,15 @@ function renderRun(run, busy) {
     element("summary", `${run.startedAt} · ${run.trigger} · ${run.status}`),
   );
   if (run.releaseId) block.append(element("p", `Release ${run.releaseId}`));
-  if (run.failedDates.length || run.pendingDates.length) {
-    const retry = element("button", "Retry these sittings");
+  if (
+    (run.status === "failed" && run.start && run.end) ||
+    run.failedDates.length ||
+    run.pendingDates.length
+  ) {
+    const retry = element(
+      "button",
+      run.status === "failed" ? "Retry this run" : "Retry these sittings",
+    );
     retry.disabled = busy;
     retry.addEventListener("click", () => launch(run.runId));
     block.append(retry);

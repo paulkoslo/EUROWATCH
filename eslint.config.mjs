@@ -33,7 +33,7 @@ export default [
     languageOptions: { globals: globals.node },
   },
   {
-    files: ["public/app.js"],
+    files: ["public/app.js", "private/*.js"],
     ...js.configs.recommended,
     languageOptions: { globals: globals.browser, sourceType: "module" },
   },
