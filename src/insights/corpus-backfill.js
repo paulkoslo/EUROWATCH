@@ -1,5 +1,6 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const lockfile = require("proper-lockfile");
 const { open, close, all } = require("../data/sqlite");
 const { hash } = require("./model");
 const { streamCorpus } = require("./corpus");
@@ -25,13 +26,12 @@ async function corpusBackfill({
       "An archive, checkpoint and positive batch size are required.",
     );
   await fs.mkdir(checkpoint, { recursive: true, mode: 0o700 });
-  const lock = path.join(checkpoint, "corpus-writer.lock");
-  await fs.mkdir(lock);
+  const unlock = await lockfile.lock(path.resolve(checkpoint, "corpus"), {
+    lockfilePath: path.resolve(checkpoint, "corpus-writer.lock"),
+    realpath: false,
+    stale: 120_000,
+  });
   try {
-    durableWrite(path.join(lock, "owner.json"), {
-      pid: process.pid,
-      startedAt: new Date().toISOString(),
-    });
     const identity = async () => {
       const wal = await fs.stat(`${filename}-wal`).catch((error) => {
         if (error.code !== "ENOENT") throw error;
@@ -87,6 +87,8 @@ async function corpusBackfill({
       reservedUsd: 0,
       reportedCostUsd: 0,
       spendHalted: false,
+      incomplete: false,
+      retryable: false,
       coverage: {},
       diagnostics: 0,
     };
@@ -160,6 +162,8 @@ async function corpusBackfill({
           aggregate.coverage[key][status] =
             (aggregate.coverage[key][status] || 0) + count;
       }
+      aggregate.incomplete ||= !summary.complete;
+      aggregate.retryable ||= summary.retryable;
       if (
         aggregate.attempts >= maxItems ||
         aggregate.spendHalted ||
@@ -172,7 +176,7 @@ async function corpusBackfill({
     durableWrite(path.join(checkpoint, "corpus-report.json"), aggregate);
     return aggregate;
   } finally {
-    await fs.rm(lock, { recursive: true, force: true });
+    await unlock();
   }
 }
 

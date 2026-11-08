@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const lockfile = require("proper-lockfile");
 const { randomUUID } = require("node:crypto");
 const { hash, requestFor, attemptResult, resultFor } = require("./model");
 
@@ -48,24 +49,13 @@ async function backfill({
     ids.add(record.id);
   }
   fs.mkdirSync(checkpoint, { recursive: true, mode: 0o700 });
-  const lock = path.join(checkpoint, "writer.lock");
-  try {
-    fs.mkdirSync(lock);
-  } catch (error) {
-    if (error.code === "EEXIST")
-      throw new Error(
-        "Checkpoint locked; verify prior writer stopped before removing writer.lock",
-      );
-    throw error;
-  }
+  const unlock = await lockfile.lock(checkpoint, {
+    lockfilePath: path.join(checkpoint, "writer.lock"),
+    stale: 120_000,
+  });
   let ledgerFd;
   const runId = randomUUID();
   try {
-    durableWrite(path.join(lock, "owner.json"), {
-      pid: process.pid,
-      runId,
-      startedAt: new Date().toISOString(),
-    });
     if (provider) {
       const identity = provider.kind || "custom";
       const file = path.join(checkpoint, "provider.json");
@@ -231,7 +221,7 @@ async function backfill({
     return report;
   } finally {
     if (ledgerFd !== undefined) fs.closeSync(ledgerFd);
-    fs.rmSync(lock, { recursive: true });
+    await unlock();
   }
 }
 module.exports = { backfill, durableWrite };
