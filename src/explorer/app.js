@@ -7,6 +7,10 @@ const queries = require("./queries");
 const { officialMemberships } = require("../data/mep-roster");
 const { createInsightsRouter } = require("../insights/router");
 const { readReviewedPublication } = require("../insights/release");
+const {
+  currentOfficialContext,
+  contextHtml,
+} = require("../insights/context-view");
 
 const fields = {
   id: "i.id",
@@ -163,6 +167,17 @@ function createApp(
         ? null
         : "Matching analytics is unavailable. Prepare the snapshot again.",
     }),
+  );
+  get("/api/official-context", async (req, res) =>
+    res.json({
+      datasetId: req.dataset.release.id,
+      context: await currentOfficialContext(req.dataset.db),
+    }),
+  );
+  get("/parliament", async (req, res) =>
+    res
+      .type("html")
+      .send(contextHtml(await currentOfficialContext(req.dataset.db))),
   );
   get("/api/localrun", (req, res) => res.json({ localrun: false }));
   get("/api/sittings", async (req, res) =>

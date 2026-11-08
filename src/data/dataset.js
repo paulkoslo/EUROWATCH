@@ -111,7 +111,7 @@ async function prepare({
         );
         await exec(
           db,
-          "DELETE FROM speeches WHERE NOT EXISTS (SELECT 1 FROM sittings s WHERE s.id=speeches.id); DELETE FROM sittings_cache; DROP TABLE IF EXISTS public_insights;",
+          "DELETE FROM speeches WHERE NOT EXISTS (SELECT 1 FROM sittings s WHERE s.id=speeches.id); DELETE FROM sittings_cache; DROP TABLE IF EXISTS public_insights; DROP TABLE IF EXISTS official_context_editions;",
         );
         await exec(db, "COMMIT");
       } catch (error) {

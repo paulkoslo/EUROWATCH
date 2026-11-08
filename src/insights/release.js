@@ -10,6 +10,7 @@ const { createReleaseStorageFromEnv } = require("../data/release-storage");
 const { streamCorpus } = require("./corpus");
 const { requestFor, hash, validateCandidate } = require("./model");
 const { buildPublication } = require("./publication");
+const { storeOfficialContext } = require("./context-view");
 const { options, read } = require("./cli");
 
 async function verifyApprovals({ filename, corpus, report, approvals }) {
@@ -275,11 +276,14 @@ async function publishReviewed({
   storage,
   corpus,
   report,
-  approvals,
+  approvals = [],
+  context,
   weekStart,
   publicBaseUrl,
   workRoot = os.tmpdir(),
 }) {
+  if (!approvals.length && !context)
+    throw new Error("Provide reviewed results or an official context bundle.");
   const runId = randomUUID();
   const lease = await claimLease(storage, runId);
   if (!lease) throw new Error("Another archive update is running.");
@@ -301,12 +305,14 @@ async function publishReviewed({
       );
     const filename = path.join(work, "archive.db");
     await storage.downloadCheckpoint(current.value.checkpoint, filename);
-    const approved = await verifyApprovals({
-      filename,
-      corpus,
-      report,
-      approvals,
-    });
+    const approved = approvals.length
+      ? await verifyApprovals({
+          filename,
+          corpus,
+          report,
+          approvals,
+        })
+      : [];
     const releaseId = randomUUID();
     const briefings = approved.filter(({ record }) => record.kind !== "speech");
     const publication = briefings.length
@@ -328,13 +334,18 @@ async function publishReviewed({
             .sort(),
         })
       : null;
-    const written = await writeReviewed({
-      filename,
-      approved,
-      publication,
-      editionKey,
-    });
-    if (!written.changed)
+    const written = approved.length
+      ? await writeReviewed({
+          filename,
+          approved,
+          publication,
+          editionKey,
+        })
+      : { changed: 0 };
+    const contextChanges = context
+      ? await storeOfficialContext(filename, context)
+      : 0;
+    if (!written.changed && !contextChanges)
       return {
         releaseId: manifest.id,
         publicationId: written.publicationId,
@@ -376,9 +387,10 @@ if (require.main === module) {
     .then(() =>
       publishReviewed({
         storage,
-        corpus: read(opts.corpus),
-        report: read(opts.report),
-        approvals: read(opts.approvals),
+        corpus: opts.corpus ? read(opts.corpus) : undefined,
+        report: opts.report ? read(opts.report) : undefined,
+        approvals: opts.approvals ? read(opts.approvals) : undefined,
+        context: opts.context ? read(opts.context) : undefined,
         weekStart: opts.week,
         publicBaseUrl: opts["base-url"],
         workRoot: process.env.DATA_UPDATE_WORK_DIR,
