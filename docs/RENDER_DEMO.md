@@ -2,9 +2,15 @@
 
 Use these settings for a Render web service running the prepared-dataset version of EUROWATCH.
 
-## Prepare before changing the service
+## Recover EUROWATCH-1 from its existing archive
 
-The stabilized server requires a release directory containing `ep_data.db`, `analytics.db` and `manifest.json`. It refuses legacy databases without this metadata. Generate the release locally from a verified source:
+Render starts this app with `npm start`. If `DATASET_DIR` and `data/current.json` are both absent, startup prepares the full `data/ep_data.db` from the mounted disk. It rebuilds matching analytics, verifies the release and writes the pointer before opening the HTTP port. Later starts reuse the selected release. The legacy demo file paths do not select the archive.
+
+On EUROWATCH-1, the archive is at `/opt/render/project/src/data/ep_data.db`. Keep the existing build and start commands. Allow the first startup time to copy and validate the archive. The mount needs free space for one full copy plus 512 MiB. Startup logs show the preparation and selected release ID. After deploying, confirm `/readyz` returns that ID with `analyticsAvailable: true` and the full download sends the same `X-Dataset-ID`.
+
+## Prepare a release for other environments
+
+The explorer serves a prepared directory containing `ep_data.db`, `analytics.db` and `manifest.json`. You can generate and select a release explicitly:
 
 ```sh
 npm ci
