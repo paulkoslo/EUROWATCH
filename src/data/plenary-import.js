@@ -2,6 +2,14 @@ const fs = require("node:fs/promises");
 const { parseArgs } = require("node:util");
 const { open, all, get, exec, run, close } = require("./sqlite");
 const { migrate } = require("./schema");
+const { canonicalVersion } = require("./canonical-schema");
+const {
+  currentRevision,
+  saveRevision,
+  linkSpeech,
+  matchSpeeches,
+} = require("./source-revisions");
+
 const {
   discoverSittings,
   fetchTranscript,
@@ -72,7 +80,14 @@ async function speakerIndex(db) {
   return speakers;
 }
 
-async function storeSitting(db, sitting, transcript, speakers, detector) {
+async function storeSitting(
+  db,
+  sitting,
+  transcript,
+  speakers,
+  detector,
+  canonical,
+) {
   const { date, documentId, startDate } = sitting;
   const { content, speeches } = transcript;
   const id = `sitting-${date}`;
@@ -98,7 +113,20 @@ async function storeSitting(db, sitting, transcript, speakers, detector) {
   });
 
   return transaction(db, async () => {
-    if (await alreadyImported(db, date)) return false;
+    const existing = await alreadyImported(db, date);
+    if (existing && !canonical) return "existing";
+    const previous = existing ? await currentRevision(db, id) : null;
+    if (existing && previous?.provider !== "europarl") return "existing";
+    if (previous?.format === "docx" && transcript.source === "html")
+      throw new Error(
+        "The official DOCX used for the current revision is unavailable.",
+      );
+    if (
+      previous?.sha256 === transcript.provenance.sha256 &&
+      previous.officialId === documentId
+    )
+      return "existing";
+    const matches = previous ? await matchSpeeches(db, id, speeches) : [];
     // Older research databases reference speeches, newer ones reference sittings.
     for (const table of ["sittings", "speeches"]) {
       await run(
@@ -107,6 +135,8 @@ async function storeSitting(db, sitting, transcript, speakers, detector) {
         INSERT INTO ${table}
         (id, type, label, date, activity_date, content, docIdentifier, activity_type, activity_start_date, last_updated)
         VALUES (?, 'PLENARY_DEBATE', ?, ?, ?, ?, ?, 'PLENARY_SITTING', ?, ?)
+        ON CONFLICT(id) DO UPDATE SET content=excluded.content,docIdentifier=excluded.docIdentifier,
+          activity_start_date=excluded.activity_start_date,last_updated=excluded.last_updated
       `,
         [
           id,
@@ -120,19 +150,36 @@ async function storeSitting(db, sitting, transcript, speakers, detector) {
         ],
       );
     }
-    for (const entry of entries) {
-      await run(
+    const revisionId = canonical
+      ? await saveRevision(db, id, sitting, transcript)
+      : null;
+    for (const [index, entry] of entries.entries()) {
+      const speechId = matches[index] ?? null;
+      const stored = await run(
         db,
         `
         INSERT INTO individual_speeches
-        (sitting_id, speaker_name, political_group, title, speech_content, speech_order, mep_id,
+        (id, sitting_id, speaker_name, political_group, title, speech_content, speech_order, mep_id,
          topic, language, political_group_raw, political_group_std, political_group_kind, political_group_reason)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET speaker_name=excluded.speaker_name,
+          political_group=excluded.political_group,title=excluded.title,speech_content=excluded.speech_content,
+          speech_order=excluded.speech_order,mep_id=excluded.mep_id,topic=excluded.topic,
+          language=excluded.language,political_group_raw=excluded.political_group_raw,
+          political_group_std=excluded.political_group_std,political_group_kind=excluded.political_group_kind,
+          political_group_reason=excluded.political_group_reason
       `,
-        entry,
+        [speechId, ...entry],
       );
+      if (canonical)
+        await linkSpeech(
+          db,
+          speechId ?? stored.lastID,
+          revisionId,
+          speeches[index].officialId,
+        );
     }
-    return true;
+    return existing ? "revised" : "imported";
   });
 }
 
@@ -144,6 +191,8 @@ async function importSittings({
   log = console.log,
   request,
   sourcePreference = "html",
+  updateRevisions = false,
+  dates,
   onEvent = () => {},
 }) {
   if (!["html", "docx"].includes(sourcePreference))
@@ -158,6 +207,7 @@ async function importSittings({
     );
   let db;
   let detector;
+  let canonical = false;
   try {
     let speakers;
     if (filename) {
@@ -195,6 +245,9 @@ async function importSittings({
             );
           await migrate(db);
         });
+        canonical = Boolean(await canonicalVersion(db));
+        if (updateRevisions && !canonical)
+          throw new Error("Hosted refresh requires a canonical checkpoint.");
         speakers = await speakerIndex(db);
       }
     }
@@ -221,6 +274,8 @@ async function importSittings({
         1 -
         sittings.length,
     });
+    if (dates)
+      sittings = sittings.filter((sitting) => dates.includes(sitting.date));
     const result = {
       confirmed: sittings.length,
       imported: 0,
@@ -230,6 +285,7 @@ async function importSittings({
       failed: 0,
       items: [],
     };
+    if (updateRevisions) result.revised = 0;
     for (const sitting of sittings) {
       const began = Date.now();
       const record = (outcome, details = {}) => {
@@ -245,7 +301,13 @@ async function importSittings({
       };
       let transcript;
       try {
-        if (db && (await alreadyImported(db, sitting.date))) {
+        if (
+          db &&
+          (await alreadyImported(db, sitting.date)) &&
+          (!updateRevisions ||
+            (await currentRevision(db, `sitting-${sitting.date}`))?.provider !==
+              "europarl")
+        ) {
           result.existing++;
           record("existing");
           log(`${sitting.date} already imported`);
@@ -276,15 +338,21 @@ async function importSittings({
           });
         } else {
           detector ??= await createDetector();
-          if (
-            !(await storeSitting(db, sitting, transcript, speakers, detector))
-          ) {
-            result.existing++;
+          const outcome = await storeSitting(
+            db,
+            sitting,
+            transcript,
+            speakers,
+            detector,
+            canonical,
+          );
+          result[outcome] = (result[outcome] ?? 0) + 1;
+          if (outcome === "existing") {
+            record(outcome, { attempts: transcript.attempts });
             log(`${sitting.date} already imported`);
             continue;
           }
-          result.imported++;
-          record("imported", {
+          record(outcome, {
             source: transcript.source,
             provenance: transcript.provenance,
             readerUrl: transcript.readerUrl,
