@@ -1,12 +1,39 @@
 require("dotenv").config({ quiet: true });
 const { loadDataset, currentDirectory } = require("./src/data/dataset");
+const path = require("node:path");
+const { createReleaseStorageFromEnv } = require("./src/data/release-storage");
+const { createReleaseManager } = require("./src/data/release-manager");
 const { createApp } = require("./src/explorer/app");
 
 async function start() {
-  const directory =
-    process.env.DATASET_DIR || (await currentDirectory(__dirname));
-  const dataset = await loadDataset(directory);
-  const app = createApp(dataset, {
+  const storage = createReleaseStorageFromEnv();
+  let source;
+  if (storage) {
+    const fallbackDirectory =
+      process.env.DATASET_DIR ||
+      (await currentDirectory(__dirname).catch(() => undefined));
+    try {
+      source = await createReleaseManager({
+        storage,
+        cacheDir:
+          process.env.RELEASE_CACHE_DIR ||
+          path.join(__dirname, "data/release-cache"),
+        fallbackDirectory,
+        pollIntervalMs: Number(process.env.RELEASE_POLL_INTERVAL_MS || 60000),
+        maxCacheBytes: Number(
+          process.env.RELEASE_CACHE_MAX_BYTES || 16 * 1024 ** 3,
+        ),
+      });
+    } catch (error) {
+      storage.close();
+      throw error;
+    }
+  } else {
+    const directory =
+      process.env.DATASET_DIR || (await currentDirectory(__dirname));
+    source = await loadDataset(directory);
+  }
+  const app = createApp(source, {
     fullDownload: process.env.ENABLE_FULL_DATASET_DOWNLOAD !== "0",
     trustProxy: process.env.TRUST_PROXY === "1",
   });
@@ -15,12 +42,12 @@ async function start() {
       process.env.HOST ||
       (process.env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1");
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
-    await dataset.close();
+    await source.close();
     throw new Error("PORT must be between 0 and 65535.");
   }
   const server = app.listen(port, host, () =>
     console.log(
-      `EUROWATCH listening on http://${host}:${server.address().port} · dataset ${dataset.release.id}`,
+      `EUROWATCH listening on http://${host}:${server.address().port} · dataset ${(source.dataset || source).release.id}`,
     ),
   );
   server.requestTimeout = 30000;
@@ -30,7 +57,7 @@ async function start() {
     if (stopping) return;
     stopping = true;
     server.close(async () => {
-      await dataset.close();
+      await source.close();
       process.exitCode = 0;
     });
     server.closeIdleConnections();
@@ -43,8 +70,12 @@ async function start() {
   process.once("SIGINT", stop);
   server.once("error", async (error) => {
     console.error(error.message);
-    await dataset.close();
+    await source.close();
     process.exitCode = 1;
+  });
+  server.once("close", () => {
+    process.removeListener("SIGTERM", stop);
+    process.removeListener("SIGINT", stop);
   });
   return server;
 }

@@ -44,7 +44,7 @@ function limiter() {
   };
 }
 function createApp(
-  dataset,
+  source,
   { fullDownload = true, trustProxy = false, logger = console } = {},
 ) {
   const app = express();
@@ -59,16 +59,60 @@ function createApp(
     });
     next();
   });
-  app.get("/healthz", (req, res) => res.json({ status: "ok" }));
-  app.get("/readyz", (req, res) =>
+  app.use((req, res, next) => {
+    const lease =
+      typeof source.acquire === "function"
+        ? source.acquire()
+        : { dataset: source, release() {} };
+    req.dataset = lease.dataset;
+    let ended = false,
+      work = 0,
+      released = false;
+    const release = () => {
+      if (ended && work === 0 && !released) {
+        released = true;
+        lease.release();
+      }
+    };
+    const end = () => {
+      ended = true;
+      release();
+    };
+    res.once("finish", end);
+    res.once("close", end);
+    req.beginDatasetWork = () => {
+      work++;
+    };
+    req.endDatasetWork = () => {
+      work--;
+      release();
+    };
+    next();
+  });
+  // A disconnected response can still have an async query in progress. Keep
+  // its lease until both the response and the route's asynchronous work finish.
+  function get(route, handler) {
+    app.get(route, async (req, res, next) => {
+      req.beginDatasetWork();
+      try {
+        await handler(req, res, next);
+      } catch (error) {
+        next(error);
+      } finally {
+        req.endDatasetWork();
+      }
+    });
+  }
+  get("/healthz", (req, res) => res.json({ status: "ok" }));
+  get("/readyz", (req, res) =>
     res.json({
       ready: true,
-      datasetId: dataset.release.id,
-      analyticsAvailable: !!dataset.analytics,
+      datasetId: req.dataset.release.id,
+      analyticsAvailable: !!req.dataset.analytics,
     }),
   );
   app.use("/api", limiter(), (req, res, next) => {
-    res.set("X-Dataset-ID", dataset.release.id);
+    res.set("X-Dataset-ID", req.dataset.release.id);
     res.set("Cache-Control", "no-store");
     if (!["GET", "HEAD"].includes(req.method))
       return res.status(405).set("Allow", "GET, HEAD").json({
@@ -76,52 +120,54 @@ function createApp(
       });
     next();
   });
-  app.get("/api/data-status", (req, res) =>
+  get("/api/data-status", (req, res) =>
     res.json({
-      ...dataset.release,
+      ...req.dataset.release,
       coverage: {
-        latestStoredSitting: dataset.release.stats.toDate,
-        lastSuccessfulRefresh: dataset.release.refresh?.completedAt || null,
-        pendingDates: dataset.release.refresh?.pendingDates ?? null,
-        failedDates: dataset.release.refresh?.failedDates ?? null,
+        latestStoredSitting: req.dataset.release.stats.toDate,
+        lastSuccessfulRefresh: req.dataset.release.refresh?.completedAt || null,
+        pendingDates: req.dataset.release.refresh?.pendingDates ?? null,
+        failedDates: req.dataset.release.refresh?.failedDates ?? null,
       },
-      analyticsAvailable: !!dataset.analytics,
-      analyticsError: dataset.analytics
+      analyticsAvailable: !!req.dataset.analytics,
+      analyticsError: req.dataset.analytics
         ? null
         : "Matching analytics is unavailable. Prepare the snapshot again.",
     }),
   );
-  app.get("/api/localrun", (req, res) => res.json({ localrun: false }));
-  app.get("/api/sittings", async (req, res) =>
+  get("/api/localrun", (req, res) => res.json({ localrun: false }));
+  get("/api/sittings", async (req, res) =>
     res.json(
       await queries.sittings(
-        dataset,
+        req.dataset,
         params.range(req.query),
         params.pagination(req.query),
       ),
     ),
   );
-  app.get("/api/sittings/:id", async (req, res) =>
-    res.json(await queries.sitting(dataset, params.sittingId(req.params.id))),
+  get("/api/sittings/:id", async (req, res) =>
+    res.json(
+      await queries.sitting(req.dataset, params.sittingId(req.params.id)),
+    ),
   );
-  app.get("/api/sittings/:id/speeches", async (req, res) => {
+  get("/api/sittings/:id/speeches", async (req, res) => {
     const id = params.sittingId(req.params.id);
-    await queries.sitting(dataset, id);
+    await queries.sitting(req.dataset, id);
     res.json(
       await queries.speeches(
-        dataset,
+        req.dataset,
         { sitting: id },
         params.pagination(req.query),
       ),
     );
   });
-  app.get("/api/speakers", async (req, res) => {
+  get("/api/speakers", async (req, res) => {
     const source = params.text(req.query.source, "source");
     if (source && !["api", "historic", "unresolved"].includes(source))
       throw new params.HttpError(400, "Unknown speaker record source.");
     res.json(
       await queries.speakers(
-        dataset,
+        req.dataset,
         {
           q: params.text(req.query.q),
           source,
@@ -131,39 +177,41 @@ function createApp(
       ),
     );
   });
-  app.get("/api/speakers/:id", async (req, res) =>
-    res.json(await queries.speaker(dataset, params.speakerId(req.params.id))),
+  get("/api/speakers/:id", async (req, res) =>
+    res.json(
+      await queries.speaker(req.dataset, params.speakerId(req.params.id)),
+    ),
   );
-  app.get("/api/speakers/:id/speeches", async (req, res) => {
+  get("/api/speakers/:id/speeches", async (req, res) => {
     const id = params.speakerId(req.params.id);
-    await queries.speaker(dataset, id);
+    await queries.speaker(req.dataset, id);
     res.json(
       await queries.speeches(
-        dataset,
+        req.dataset,
         { speaker: id, ...params.range(req.query) },
         params.pagination(req.query),
       ),
     );
   });
-  app.get("/api/speeches", async (req, res) =>
+  get("/api/speeches", async (req, res) =>
     res.json(
       await queries.sittings(
-        dataset,
+        req.dataset,
         params.range(req.query),
         params.pagination(req.query),
         req.query.personId ? params.speakerId(req.query.personId) : null,
       ),
     ),
   );
-  app.get("/api/topics", async (req, res) => {
-    if (!dataset.analytics)
+  get("/api/topics", async (req, res) => {
+    if (!req.dataset.analytics)
       throw new params.HttpError(
         503,
         "Matching topic analytics is unavailable.",
       );
     res.json({
       data: await all(
-        dataset.analytics,
+        req.dataset.analytics,
         "SELECT topic,count FROM topics ORDER BY count DESC,topic",
       ),
     });
@@ -171,24 +219,24 @@ function createApp(
   const cache = new Map();
   async function topicSeries(req, res) {
     const filters = params.seriesParams(req.query),
-      key = JSON.stringify(filters),
+      key = JSON.stringify([req.dataset.release.id, filters]),
       cached = cache.get(key);
     let result;
     if (cached && cached.expires > Date.now()) {
       result = cached.value;
       res.set("X-Cache", "HIT");
     } else {
-      result = await queries.series(dataset, filters);
+      result = await queries.series(req.dataset, filters);
       if (cache.size >= 100) cache.delete(cache.keys().next().value);
       cache.set(key, { value: result, expires: Date.now() + 180000 });
       res.set("X-Cache", "MISS");
     }
     return result;
   }
-  app.get("/api/analytics/time-series", async (req, res) =>
+  get("/api/analytics/time-series", async (req, res) =>
     res.json(await topicSeries(req, res)),
   );
-  app.get("/api/export/topics", async (req, res) => {
+  get("/api/export/topics", async (req, res) => {
     const result = await topicSeries(req, res);
     res.type("text/csv").attachment("eurowatch-topic-series.csv");
     const rows = [
@@ -221,7 +269,7 @@ function createApp(
     );
   });
   let exportsInFlight = 0;
-  app.get("/api/export/speeches", async (req, res) => {
+  get("/api/export/speeches", async (req, res) => {
     const range = params.range(req.query),
       where = queries.dateWhere(range),
       filter = where.parts.length ? `WHERE ${where.parts.join(" AND ")}` : "";
@@ -236,7 +284,7 @@ function createApp(
     )
       throw new params.HttpError(400, "Choose valid, unique export fields.");
     const count = await all(
-      dataset.db,
+      req.dataset.db,
       `SELECT COUNT(*) AS n FROM individual_speeches i JOIN sittings s ON s.id=i.sitting_id ${filter}`,
       where.values,
     );
@@ -262,7 +310,7 @@ function createApp(
         offset += 250
       ) {
         const rows = await all(
-          dataset.db,
+          req.dataset.db,
           `SELECT ${selected.map((field) => `${fields[field]} AS ${field}`).join(",")} FROM individual_speeches i JOIN sittings s ON s.id=i.sitting_id LEFT JOIN meps m ON m.id=i.mep_id ${filter} ORDER BY s.activity_date DESC,s.id DESC,i.speech_order,i.id LIMIT 250 OFFSET ?`,
           [...where.values, offset],
         );
@@ -291,23 +339,23 @@ function createApp(
       exportsInFlight--;
     }
   });
-  app.get("/api/full-dataset/status", (req, res) =>
+  get("/api/full-dataset/status", (req, res) =>
     res.json({
       available: fullDownload,
       filename: "eurowatch-snapshot.db",
-      sizeBytes: dataset.files["ep_data.db"].bytes,
-      sha256: dataset.files["ep_data.db"].sha256,
-      datasetId: dataset.release.id,
+      sizeBytes: req.dataset.files["ep_data.db"].bytes,
+      sha256: req.dataset.files["ep_data.db"].sha256,
+      datasetId: req.dataset.release.id,
     }),
   );
-  app.get("/api/download/full-dataset", (req, res) => {
+  get("/api/download/full-dataset", (req, res) => {
     if (!fullDownload)
       throw new params.HttpError(
         404,
         "Full snapshot download is not enabled. Use a filtered CSV export.",
       );
     res.download(
-      path.join(dataset.directory, "ep_data.db"),
+      path.join(req.dataset.directory, "ep_data.db"),
       "eurowatch-snapshot.db",
     );
   });
@@ -318,7 +366,7 @@ function createApp(
     }),
   );
   for (const route of ["/speech.html", "/mep-details.html", "/newest.html"])
-    app.get(route, (req, res) => {
+    get(route, (req, res) => {
       const query = new URLSearchParams({
         view: route === "/mep-details.html" ? "speakers" : "sittings",
       });

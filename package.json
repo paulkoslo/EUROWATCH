@@ -4,7 +4,9 @@
   "description": "Dashboard for EU Parliament data using public API",
   "main": "server.js",
   "private": true,
-  "engines": { "node": ">=22.13.0 <23 || >=24" },
+  "engines": {
+    "node": ">=22.13.0 <23 || >=24"
+  },
   "scripts": {
     "start": "node server.js",
     "build:render": "npm_config_build_from_source=sqlite3 npm ci --omit=dev && node -e \"require('sqlite3')\"",
@@ -33,23 +35,24 @@
     "demo-data:full": "node src/scripts/build-demo-data.js --analytics"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1164.0",
     "dotenv": "^17.2.2",
     "express": "^5.3.0",
     "sqlite3": "^6.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
-    "eslint": "^9.39.5",
     "axios": "^1.21.0",
     "cheerio": "^1.0.0",
     "cld3-asm": "^4.0.0",
     "cli-progress": "^3.12.0",
+    "eslint": "^9.39.5",
     "fflate": "^0.8.3",
     "franc": "^6.2.0",
+    "globals": "^17.0.0",
     "langs": "^2.0.0",
     "openai": "^4.0.0",
-    "proper-lockfile": "^4.1.2",
-    "globals": "^17.0.0",
-    "prettier": "^3.0.0"
+    "prettier": "^3.0.0",
+    "proper-lockfile": "^4.1.2"
   }
 }
