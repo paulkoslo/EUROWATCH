@@ -55,7 +55,6 @@ function createApp(
   const app = express();
   app.disable("x-powered-by");
   if (trustProxy) app.set("trust proxy", 1);
-  if (updateControl) app.use("/operator", limiter(), updateControl);
   app.use((req, res, next) => {
     res.set({
       "X-Content-Type-Options": "nosniff",
@@ -65,6 +64,7 @@ function createApp(
     });
     next();
   });
+  if (updateControl) app.use("/operator", limiter(), updateControl);
   app.use((req, res, next) => {
     const lease =
       typeof source.acquire === "function"

@@ -35,24 +35,28 @@ async function claimLease(storage, runId) {
   }
   let error;
   let pending = Promise.resolve();
-  const timer = setInterval(() => {
+  function renew() {
     pending = pending
       .then(async () => {
-        if (!error) {
-          lease = await storage.writeLease(renewal(), {
-            expectedETag: lease.etag,
+        if (error || Date.parse(lease.value.expiresAt) <= Date.now())
+          throw new Error("The update lost its writer lease.", {
+            cause: error,
           });
-        }
+        lease = await storage.writeLease(renewal(), {
+          expectedETag: lease.etag,
+        });
       })
       .catch((cause) => {
         error = cause;
       });
-  }, LEASE_MS / 4);
+    return pending;
+  }
+  const timer = setInterval(renew, LEASE_MS / 4);
   timer.unref();
   return {
     async assertHeld() {
-      await pending;
-      if (error || Date.parse(lease.value.expiresAt) <= Date.now())
+      await renew();
+      if (error)
         throw new Error("The update lost its writer lease.", { cause: error });
     },
     async close() {
@@ -145,10 +149,9 @@ async function seedHosted({ storage, directory, checkpoint }) {
       storage.uploadRelease(directory),
       storage.uploadCheckpoint(checkpoint, randomUUID()),
     ]);
-    await lease.assertHeld();
     return await storage.publishRelease(
       { ...release, checkpoint: privateRef },
-      { expectedETag: null },
+      { expectedETag: null, beforeCommit: lease.assertHeld },
     );
   } finally {
     await lease.close();
@@ -336,10 +339,9 @@ async function runHosted({
     const publicRef = await storage.uploadRelease(output);
     const checkpoint = await storage.uploadCheckpoint(filename, runId);
     await reporter.flush();
-    await lease.assertHeld();
     await storage.publishRelease(
       { ...publicRef, checkpoint },
-      { expectedETag: current.etag },
+      { expectedETag: current.etag, beforeCommit: lease.assertHeld },
     );
     report.releaseId = publicRef.id;
     report.status = "published";

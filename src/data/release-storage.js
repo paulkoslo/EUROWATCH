@@ -355,7 +355,7 @@ function createReleaseStorage({
       );
       return { id: manifest.id, manifestSha256: sha256(bytes) };
     },
-    async publishRelease(reference, { expectedETag } = {}) {
+    async publishRelease(reference, { expectedETag, beforeCommit } = {}) {
       conditional(expectedETag);
       const { manifest } = await remoteManifest(reference);
       for (const name of FILES)
@@ -376,6 +376,7 @@ function createReleaseStorage({
           bytes: checkpoint.bytes,
         };
       }
+      await beforeCommit?.();
       return putJson(key("current.json"), value, expectedETag);
     },
     async inspectRelease(reference) {

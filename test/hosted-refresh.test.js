@@ -40,7 +40,10 @@ function fakeStorage(root) {
   }
   return {
     readCurrent: () => read("current"),
-    publishRelease: (value, options) => write("current", value, options),
+    async publishRelease(value, options) {
+      await options.beforeCommit?.();
+      return write("current", value, options);
+    },
     readLease: () => read("lease"),
     writeLease: (value, options) => write("lease", value, options),
     readRunReport: (id) => read(id),
@@ -128,6 +131,14 @@ test("shared update job publishes twice, replays unchanged and preserves the pre
       body: "{}",
     });
   assert.equal((await fetch(base + "/operator/runs")).status, 401);
+  const page = await fetch(base + "/operator/", {
+    headers: { Authorization: auth },
+  });
+  assert.match(
+    page.headers.get("content-security-policy"),
+    /frame-ancestors 'none'/,
+  );
+  assert.equal(page.status, 200);
   assert.equal(
     (await startUpdate({ Authorization: auth, "Sec-Fetch-Site": "cross-site" }))
       .status,
