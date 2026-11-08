@@ -1,5 +1,5 @@
 const { open, close, exec, get, all, run } = require("./sqlite");
-const { fetchMemberships } = require("./mep-memberships");
+const { affiliationAt, fetchMemberships } = require("./mep-memberships");
 const { getSessionNumber } = require("../core/parliament-fetch");
 
 const api = "https://data.europarl.europa.eu/api/v2/meps";
@@ -19,7 +19,13 @@ async function request(url) {
 
 async function syncMepRoster(
   filename,
-  { date, getData = request, maxDetails = 25, onEvent = () => {} } = {},
+  {
+    date,
+    dates = [],
+    getData = request,
+    maxDetails = 25,
+    onEvent = () => {},
+  } = {},
 ) {
   if (!Number.isInteger(maxDetails) || maxDetails < 0 || maxDetails > 50)
     throw new Error("MEP details per run must be between zero and 50.");
@@ -65,6 +71,10 @@ async function syncMepRoster(
         sha256 TEXT NOT NULL,
         checked_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS official_mep_attempts (
+        person_id INTEGER PRIMARY KEY,
+        attempted_at TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS official_mep_memberships (
         person_id INTEGER NOT NULL,
         sha256 TEXT NOT NULL,
@@ -83,6 +93,51 @@ async function syncMepRoster(
         row,
       ]),
     );
+    const reserved = new Set(
+      (
+        await all(
+          db,
+          `
+      SELECT DISTINCT i.mep_id AS id FROM individual_speeches i
+      LEFT JOIN meps m ON m.id=i.mep_id WHERE i.mep_id IS NOT NULL AND m.id IS NULL
+    `,
+        )
+      ).map(({ id }) => id),
+    );
+    const nameIndex = new Map();
+    for (const [id, item] of people) {
+      const key = name(item.label);
+      nameIndex.set(key, nameIndex.has(key) ? null : id);
+    }
+    const since = new Date(Date.parse(date) - 14 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const unlinked = await all(
+      db,
+      `
+      SELECT i.id,i.speaker_name,s.activity_date AS date
+      FROM sittings s JOIN individual_speeches i ON i.sitting_id=s.id
+      WHERE i.mep_id IS NULL AND s.activity_date BETWEEN ? AND ?
+    `,
+      [since, date],
+    );
+    const recent = new Set(unlinked.map(({ id }) => id));
+    for (const day of new Set(dates.filter((value) => value < since)))
+      for (const row of await all(
+        db,
+        `
+        SELECT i.id,i.speaker_name,s.activity_date AS date
+        FROM individual_speeches i JOIN sittings s ON s.id=i.sitting_id
+        WHERE i.mep_id IS NULL AND s.activity_date=?
+      `,
+        [day],
+      ))
+        if (!recent.has(row.id)) unlinked.push(row);
+    const speakers = new Set(
+      unlinked
+        .map((row) => nameIndex.get(name(row.speaker_name || "")))
+        .filter(Boolean),
+    );
     const checked = new Map(
       (await all(db, "SELECT * FROM official_mep_current")).map((row) => [
         row.person_id,
@@ -96,15 +151,12 @@ async function syncMepRoster(
       changed: 0,
       failed: 0,
       unresolvedIdentities: 0,
+      linkedSpeeches: 0,
     };
     const eligible = [];
     for (const [id, item] of people) {
       const existing = byId.get(id);
-      if (
-        existing &&
-        existing.source !== "api" &&
-        name(existing.label || "") !== name(item.label)
-      ) {
+      if (reserved.has(id) || (existing && existing.source !== "api")) {
         result.unresolvedIdentities++;
         continue;
       }
@@ -124,20 +176,46 @@ async function syncMepRoster(
       }
       eligible.push(id);
     }
+    const attempts = new Map(
+      (await all(db, "SELECT * FROM official_mep_attempts")).map((row) => [
+        row.person_id,
+        row.attempted_at,
+      ]),
+    );
     const earliest = Date.now() - 28 * 86_400_000;
+    const retryAfter = Date.now() - 86_400_000;
     const candidates = eligible
       .filter(
         (id) =>
-          !checked.has(id) || Date.parse(checked.get(id).checked_at) < earliest,
+          (!checked.has(id) ||
+            Date.parse(checked.get(id).checked_at) < earliest) &&
+          (!attempts.has(id) || Date.parse(attempts.get(id)) < retryAfter),
       )
       .sort(
         (a, b) =>
+          Number(speakers.has(b)) - Number(speakers.has(a)) ||
+          (attempts.get(a) || "").localeCompare(attempts.get(b) || "") ||
           (checked.get(a)?.checked_at || "").localeCompare(
             checked.get(b)?.checked_at || "",
-          ) || a - b,
-      )
-      .slice(0, maxDetails);
+          ) ||
+          a - b,
+      );
+    // Shift overdue IDs by calendar day so a disconnected detail shard cannot
+    // permanently starve other unverified members even if this run is a no-op.
+    const first = candidates.findIndex((id) => !speakers.has(id));
+    if (first !== -1 && candidates.length - first > maxDetails) {
+      const tail = candidates.splice(first);
+      const offset =
+        (Math.floor(Date.parse(date) / 86_400_000) * maxDetails) % tail.length;
+      candidates.push(...tail.slice(offset), ...tail.slice(0, offset));
+    }
+    candidates.splice(maxDetails);
     for (const id of candidates) {
+      await run(
+        db,
+        "INSERT OR REPLACE INTO official_mep_attempts VALUES (?,?)",
+        [id, new Date().toISOString()],
+      );
       let record;
       try {
         record = await fetchMemberships(id, getData);
@@ -189,6 +267,29 @@ async function syncMepRoster(
         await exec(db, "ROLLBACK");
         throw error;
       }
+    }
+    const profiles = new Map();
+    const eligibleIds = new Set(eligible);
+    for (const speech of unlinked) {
+      const id = nameIndex.get(name(speech.speaker_name || ""));
+      if (!id || !eligibleIds.has(id)) continue;
+      if (!profiles.has(id))
+        profiles.set(id, await officialMemberships(db, id));
+      const official = profiles.get(id);
+      if (
+        !official ||
+        official.unresolved ||
+        affiliationAt({ ...official, unresolved: [] }, speech.date).outcome !==
+          "matched"
+      )
+        continue;
+      result.linkedSpeeches += (
+        await run(
+          db,
+          "UPDATE individual_speeches SET mep_id=? WHERE id=? AND mep_id IS NULL",
+          [id, speech.id],
+        )
+      ).changes;
     }
     return result;
   } finally {

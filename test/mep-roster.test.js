@@ -32,7 +32,11 @@ test("official roster preserves dated group changes and avoids inferred ID colli
       if (url.includes("?")) {
         assert.match(url, /parliamentary-term=10/);
         return {
-          data: [person(2, "Different person"), person(4, "Official person")],
+          data: [
+            person(2, "Different person"),
+            person(4, "Official person"),
+            person(999, "Unrelated official"),
+          ],
         };
       }
       details++;
@@ -53,12 +57,13 @@ test("official roster preserves dated group changes and avoids inferred ID colli
   };
   const result = await syncMepRoster(filename, options);
   assert.deepEqual(result, {
-    listed: 2,
+    listed: 3,
     inserted: 1,
     checked: 1,
     changed: 1,
     failed: 0,
-    unresolvedIdentities: 1,
+    unresolvedIdentities: 2,
+    linkedSpeeches: 0,
   });
   const db = await open(filename);
   try {
@@ -75,6 +80,7 @@ test("official roster preserves dated group changes and avoids inferred ID colli
       "Bruno Example",
     );
     await run(db, "UPDATE official_mep_current SET checked_at='2000-01-01'");
+    await run(db, "UPDATE official_mep_attempts SET attempted_at='2000-01-01'");
   } finally {
     await close(db);
   }

@@ -352,24 +352,22 @@ async function runHosted({
         );
       }
     }
-    if (!result.imported && !result.revised) {
-      await savePending(pendingDates);
-      report.status = "unchanged";
-      await event(
-        "complete",
-        "No changed records. The current release is still active.",
-      );
-      return report;
-    }
+    let rosterChanged = false;
     if (rosterSync) {
       try {
         const roster = await rosterSync(filename, {
           date: end,
+          dates: result.items
+            .filter((item) => ["imported", "revised"].includes(item.outcome))
+            .map((item) => item.date),
           onEvent: (item) =>
             reporter.event("roster", `MEP ${item.personId} ${item.outcome}`, {
               item,
             }),
         });
+        rosterChanged = Boolean(
+          roster.inserted || roster.changed || roster.linkedSpeeches,
+        );
         await event(
           "roster",
           "Checked the official MEP roster and dated memberships.",
@@ -381,6 +379,15 @@ async function runHosted({
           "The official roster could not be synchronized. Transcript data was verified separately.",
         );
       }
+    }
+    if (!result.imported && !result.revised && !rosterChanged) {
+      await savePending(pendingDates);
+      report.status = "unchanged";
+      await event(
+        "complete",
+        "No changed records. The current release is still active.",
+      );
+      return report;
     }
     const output = path.join(work, "release");
     await event("prepare", "Rebuilding the public archive and analytics.");
