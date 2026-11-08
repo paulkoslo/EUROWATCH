@@ -127,7 +127,7 @@ test("bounded batches and exclusive writer preserve durable progress", async (t)
   assert.equal(resumed.reused, 1);
   assert.equal(resumed.attempts, 1);
   fs.mkdirSync(path.join(options.checkpoint, "writer.lock"));
-  await assert.rejects(backfill(options), /locked/);
+  await assert.rejects(backfill(options), { code: "ELOCKED" });
 });
 test("corrupt ledger fails closed without issuing requests", async (t) => {
   const options = setup(t);

@@ -1,5 +1,6 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const lockfile = require("proper-lockfile");
 const { setTimeout: delay } = require("node:timers/promises");
 const { createReleaseStorageFromEnv } = require("../data/release-storage");
 const { hashFile } = require("../data/dataset");
@@ -58,6 +59,7 @@ function createRecentEnrichment({
   budgetUsd,
   maxItems = 100,
   lookbackDays = 14,
+  retryFailed = false,
   kinds = ["debate", "sitting"],
   onEvent = () => {},
   backfill = corpusBackfill,
@@ -87,7 +89,10 @@ function createRecentEnrichment({
   let verified;
   return async function checkForEnrichment() {
     await fs.mkdir(root, { recursive: true, mode: 0o700 });
-    await fs.mkdir(lock);
+    const unlock = await lockfile.lock(root, {
+      lockfilePath: lock,
+      stale: 120_000,
+    });
     try {
       const state = await readState(stateFile);
       const current = await storage.readCurrent();
@@ -95,7 +100,8 @@ function createRecentEnrichment({
         throw new Error("No verified canonical checkpoint is published.");
       const { id, checkpoint } = current.value;
       const prior = state.completed?.scope === scope ? state.completed : null;
-      if (prior?.id === id) return { id, status: "unchanged" };
+      if (prior?.id === id && !(retryFailed && state.retryFrom))
+        return { id, status: "unchanged" };
       const { manifest } = await storage.inspectRelease(current.value);
       if (
         verified !== checkpoint.sha256 &&
@@ -119,13 +125,21 @@ function createRecentEnrichment({
         durableWrite(stateFile, state);
       }
 
-      const { from, revisions } = await recentWindow(
+      const { from: changedFrom, revisions } = await recentWindow(
         filename,
         manifest,
         prior,
         lookbackDays,
       );
+      const from = [
+        changedFrom,
+        state.pendingFrom,
+        retryFailed && state.retryFrom,
+      ]
+        .filter(Boolean)
+        .sort()[0];
       const to = manifest.stats.toDate;
+      let retryable = false;
       const emit = (event) => onEvent({ releaseId: id, ...event });
       emit({ type: "candidate_check", from, to });
       if (from) {
@@ -136,28 +150,42 @@ function createRecentEnrichment({
           provider,
           budgetUsd,
           maxItems,
+          retryFailed,
           from,
           to,
           kinds,
           onEvent: emit,
         });
+        retryable = report.retryable;
+        if (retryable)
+          state.retryFrom = [state.retryFrom, from].filter(Boolean).sort()[0];
         if (
           report.spendHalted ||
           report.incomplete ||
           report.examinedWindows < report.windows
-        )
+        ) {
+          state.pendingFrom = from;
+          durableWrite(stateFile, state);
           return {
             id,
             status: report.spendHalted ? "spend_halted" : "pending",
             from,
             to,
           };
+        }
+        if (retryFailed && !retryable) delete state.retryFrom;
       }
+      delete state.pendingFrom;
       state.completed = { id, scope, revisions };
       durableWrite(stateFile, state);
-      return { id, status: from ? "prepared" : "unchanged", from, to };
+      return {
+        id,
+        status: retryable ? "retry_available" : from ? "prepared" : "unchanged",
+        from,
+        to,
+      };
     } finally {
-      await fs.rm(lock, { recursive: true, force: true });
+      await unlock();
     }
   };
 }
@@ -168,6 +196,9 @@ async function main() {
   if (!opts.config || !opts.workspace)
     throw new Error("Use --config and --workspace on a persistent disk.");
   const config = read(opts.config);
+  if (opts.watch === "true" && opts["retry-failed"] === "true")
+    throw new Error("Retry failed attempts explicitly in a single run.");
+
   const storage = createReleaseStorageFromEnv();
   if (!storage)
     throw new Error("Configure shared release storage for enrichment.");
@@ -195,6 +226,7 @@ async function main() {
       budgetUsd: Number(opts.budget || 0),
       maxItems: Number(opts["max-items"] || 100),
       lookbackDays: Number(opts["lookback-days"] || 14),
+      retryFailed: opts["retry-failed"] === "true",
       kinds: opts.kinds?.split(","),
       onEvent: log,
     });

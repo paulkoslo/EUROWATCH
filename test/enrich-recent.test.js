@@ -39,19 +39,26 @@ test("recent enrichment resumes a verified release and detects a correction outs
     },
   };
   const windows = [];
-  const check = createRecentEnrichment({
+  const options = {
     storage,
     workspace: path.join(dir, "worker"),
     config: { model: "fixture" },
-    async backfill(options) {
-      windows.push([options.from, options.to]);
+    async backfill(input) {
+      windows.push([input.from, input.to]);
       return {
         examinedWindows: 1,
         windows: 1,
         incomplete: windows.length === 1,
+        retryable: windows.length === 3 && !input.retryFailed,
       };
     },
-  });
+  };
+  await fs.mkdir(options.workspace);
+  const stale = path.join(options.workspace, "recent-writer.lock");
+  await fs.mkdir(stale);
+  const earlier = new Date(Date.now() - 180_000);
+  await fs.utimes(stale, earlier, earlier);
+  const check = createRecentEnrichment(options);
   assert.equal((await check()).status, "pending");
   assert.equal((await check()).status, "prepared");
   assert.equal((await check()).status, "unchanged");
@@ -66,10 +73,16 @@ test("recent enrichment resumes a verified release and detects a correction outs
     await close(db);
   }
   current = await identify("second");
-  assert.equal((await check()).status, "prepared");
+  assert.equal((await check()).status, "retry_available");
+  assert.equal((await check()).status, "unchanged");
+  assert.equal(
+    (await createRecentEnrichment({ ...options, retryFailed: true })()).status,
+    "prepared",
+  );
   assert.deepEqual(windows, [
     ["2024-12-31", "2025-01-13"],
     ["2024-12-31", "2025-01-13"],
+    ["2024-01-15", "2025-01-13"],
     ["2024-01-15", "2025-01-13"],
   ]);
   assert.equal(downloads, 2);
