@@ -29,6 +29,13 @@ async function syncMepRoster(
 ) {
   if (!Number.isInteger(maxDetails) || maxDetails < 0 || maxDetails > 50)
     throw new Error("MEP details per run must be between zero and 50.");
+  if (
+    typeof date !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    !Number.isFinite(Date.parse(date)) ||
+    new Date(date).toISOString().slice(0, 10) !== date
+  )
+    throw new Error("A valid date is required for the official roster.");
   const term = getSessionNumber(date);
   const people = new Map();
   for (let page = 0; page < 25; page++) {
@@ -71,6 +78,7 @@ async function syncMepRoster(
         sha256 TEXT NOT NULL,
         checked_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS official_mep_new_profiles (person_id INTEGER PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS official_mep_attempts (
         person_id INTEGER PRIMARY KEY,
         attempted_at TEXT NOT NULL
@@ -172,6 +180,7 @@ async function syncMepRoster(
             item.sortLabel ?? null,
           ],
         );
+        await run(db, "INSERT INTO official_mep_new_profiles VALUES (?)", [id]);
         result.inserted++;
       }
       eligible.push(id);
