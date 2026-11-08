@@ -22,3 +22,18 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm audit --omit=dev --audit-level=high
+  render-smoke:
+    name: Render production smoke test
+    runs-on: ubuntu-latest
+    container: node:22-bookworm
+    timeout-minutes: 15
+    env:
+      NODE_ENV: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the native build toolchain
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3 make g++
+      - run: npm run build:render
+      - run: node --test test/api.test.js

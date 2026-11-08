@@ -7,6 +7,7 @@
   "engines": { "node": ">=22.13.0 <23 || >=24" },
   "scripts": {
     "start": "node server.js",
+    "build:render": "npm_config_build_from_source=sqlite3 npm ci --omit=dev && node -e \"require('sqlite3')\"",
     "preview:refresh": "node src/explorer/local-refresh.js",
     "test": "node --test test/*.test.js",
     "lint": "eslint .",
