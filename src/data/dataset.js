@@ -69,7 +69,13 @@ async function collectStats(db) {
   return { ...stats, ...coverage, ...people };
 }
 
-async function prepare({ source, output, from = null, log = console.log }) {
+async function prepare({
+  source,
+  output,
+  from = null,
+  refresh,
+  log = console.log,
+}) {
   source = path.resolve(source);
   output = path.resolve(output);
   await fs.access(source);
@@ -186,6 +192,7 @@ async function prepare({ source, output, from = null, log = console.log }) {
       preparedAt: new Date().toISOString(),
       stats,
       subsetFrom: from,
+      ...(refresh ? { refresh } : {}),
     };
     for (const file of [db, analytics])
       await setMetadata(file, "release", release);

@@ -45,7 +45,12 @@ function limiter() {
 }
 function createApp(
   source,
-  { fullDownload = true, trustProxy = false, logger = console } = {},
+  {
+    fullDownload = true,
+    trustProxy = false,
+    logger = console,
+    updateControl,
+  } = {},
 ) {
   const app = express();
   app.disable("x-powered-by");
@@ -59,6 +64,7 @@ function createApp(
     });
     next();
   });
+  if (updateControl) app.use("/operator", limiter(), updateControl);
   app.use((req, res, next) => {
     const lease =
       typeof source.acquire === "function"

@@ -1,0 +1,9 @@
+{
+  "name": "@eurowatch/data",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "cd ../.. && npm run preview:refresh",
+    "update": "cd ../.. && npm run data:update:hosted"
+  }
+}

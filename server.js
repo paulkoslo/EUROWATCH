@@ -4,10 +4,18 @@ const path = require("node:path");
 const { createReleaseStorageFromEnv } = require("./src/data/release-storage");
 const { createReleaseManager } = require("./src/data/release-manager");
 const { createApp } = require("./src/explorer/app");
+const { createUpdateControlFromEnv } = require("./src/explorer/update-control");
 
 async function start() {
   const storage = createReleaseStorageFromEnv();
   let source;
+  let updateControl;
+  try {
+    updateControl = createUpdateControlFromEnv(storage);
+  } catch (error) {
+    storage?.close();
+    throw error;
+  }
   if (storage) {
     const fallbackDirectory =
       process.env.DATASET_DIR ||
@@ -36,6 +44,7 @@ async function start() {
   const app = createApp(source, {
     fullDownload: process.env.ENABLE_FULL_DATASET_DOWNLOAD !== "0",
     trustProxy: process.env.TRUST_PROXY === "1",
+    updateControl,
   });
   const port = Number(process.env.PORT || 3000),
     host =

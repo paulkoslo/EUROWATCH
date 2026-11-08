@@ -229,4 +229,4 @@ async function migrateArchive({ source, output, log = console.log }) {
   }
 }
 
-module.exports = { migrateArchive };
+module.exports = { migrateArchive, archiveSnapshot: snapshot };

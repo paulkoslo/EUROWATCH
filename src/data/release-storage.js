@@ -355,7 +355,7 @@ function createReleaseStorage({
       );
       return { id: manifest.id, manifestSha256: sha256(bytes) };
     },
-    async publishRelease(reference, { expectedETag } = {}) {
+    async publishRelease(reference, { expectedETag, beforeCommit } = {}) {
       conditional(expectedETag);
       const { manifest } = await remoteManifest(reference);
       for (const name of FILES)
@@ -376,6 +376,7 @@ function createReleaseStorage({
           bytes: checkpoint.bytes,
         };
       }
+      await beforeCommit?.();
       return putJson(key("current.json"), value, expectedETag);
     },
     async inspectRelease(reference) {
@@ -440,6 +441,22 @@ function createReleaseStorage({
     readRunReport(runId) {
       return getJson(key(`private/runs/${identifier(runId)}.json`));
     },
+    writeLaunch(runId, jobId) {
+      return putJson(
+        key(`private/launches/${identifier(runId)}.json`),
+        { jobId: identifier(jobId) },
+        null,
+      );
+    },
+    readLaunch(runId) {
+      return getJson(key(`private/launches/${identifier(runId)}.json`));
+    },
+    readPendingDates() {
+      return getJson(key("private/pending-sittings.json"));
+    },
+    writePendingDates(value, { expectedETag } = {}) {
+      return putJson(key("private/pending-sittings.json"), value, expectedETag);
+    },
     readLease() {
       return getJson(key("private/update-lease.json"));
     },
@@ -452,7 +469,11 @@ function createReleaseStorage({
         throw new Error("Lease requires an expiry timestamp.");
       return putJson(
         key("private/update-lease.json"),
-        { runId: value.runId, expiresAt: value.expiresAt },
+        {
+          runId: value.runId,
+          expiresAt: value.expiresAt,
+          phase: value.phase === "queued" ? "queued" : "running",
+        },
         expectedETag,
       );
     },
