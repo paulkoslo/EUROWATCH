@@ -104,7 +104,11 @@ See the [product roadmap](docs/ROADMAP.md), [project structure](docs/PROJECT_STR
 
 ## Offline maintenance
 
-For a temporary browser refresh, run `npm run preview:refresh` with development dependencies installed and open [localhost:4319](http://localhost:4319). The **Check New Sittings** button updates a temporary preview copy, starting after the selected snapshot's last sitting. Use `DATASET_DIR` to select the starting snapshot, or use the currently promoted local release. The preview listens on loopback and discards its temporary copies when stopped. Use the staging and release commands below to publish an updated dataset.
+For a local browser refresh, run `npm run preview:refresh` with development dependencies installed and open [localhost:4319](http://localhost:4319). The **Check New Sittings** button starts a separate data process. It checks dates after the selected baseline's last sitting and switches the browser to a verified preview. Use `DATASET_DIR` to select the baseline, or use the currently promoted local release.
+
+To run the same refresh in a terminal, use `npm run data:refresh`. Add `-- --start YYYY-MM-DD --end YYYY-MM-DD` to select a date range. Both commands share a workspace under `data/refresh-preview/`, or use `LOCAL_REFRESH_WORKSPACE` to choose a different root. Staging, the preview release pointer, and one JSON Lines report per run survive restarts. The first event prints the report path. A partial run exits with status 1 in the CLI and retains its successful imports. Run the same command again to retry missing dates.
+
+The workspace holds full SQLite copies. To reclaim its space, remove the preview workspace when the preview and data process are stopped. The publication commands below select a separate served release.
 
 Use Node from `.nvmrc` and install the maintenance dependencies with `npm ci`. Preview an import without opening a database. March 8 was a Sunday and March 9 was a plenary sitting.
 

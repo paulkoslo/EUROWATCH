@@ -16,6 +16,7 @@
     "check": "npm run lint && npm run format:check && npm test",
     "data:init": "node src/scripts/dataset.js init",
     "data:import": "node src/data/plenary-import.js",
+    "data:refresh": "node src/data/refresh-run.js",
     "data:prepare": "node src/scripts/dataset.js prepare",
     "data:promote": "node src/scripts/dataset.js promote",
     "data:validate": "node src/scripts/dataset.js validate",

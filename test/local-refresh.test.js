@@ -55,6 +55,7 @@ test("local button runs one import and switches the preview after validation", a
   let requests = 0;
   const preview = await createLocalPreview({
     directory,
+    workspaceRoot: root,
     start: date,
     end: date,
     async request(url) {

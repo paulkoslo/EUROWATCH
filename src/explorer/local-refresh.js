@@ -1,24 +1,70 @@
 const express = require("express");
-const fs = require("node:fs/promises");
-const os = require("node:os");
+const { fork } = require("node:child_process");
 const path = require("node:path");
-const { constants } = require("node:fs");
-const { randomUUID } = require("node:crypto");
 const { once } = require("node:events");
 const { createApp } = require("./app");
-const { currentDirectory, loadDataset, prepare } = require("../data/dataset");
-const { importSittings, lastClosedDate } = require("../data/plenary-import");
-const { close, get, open, run } = require("../data/sqlite");
+const { currentDirectory, loadDataset } = require("../data/dataset");
+const {
+  refreshDirectory,
+  refreshWorkspace,
+  runRefresh,
+} = require("../data/refresh-run");
 
-async function createLocalPreview({ directory, start, end, request }) {
-  let dataset = await loadDataset(directory);
+function forkRefresh({ directory, workspaceRoot, start, end, onEvent }) {
+  const args = ["--dataset", directory];
+  for (const [name, value] of [
+    ["workspace", workspaceRoot],
+    ["start", start],
+    ["end", end],
+  ]) {
+    if (value) args.push(`--${name}`, value);
+  }
+  return new Promise((resolve, reject) => {
+    const child = fork(require.resolve("../data/refresh-run"), args);
+    let result;
+    let failure;
+    child.on("message", (event) => {
+      onEvent(event);
+      if (event.stage === "complete") result = event;
+      if (event.stage === "failed") failure = event.message;
+    });
+    child.once("error", reject);
+    child.once("close", (code, signal) => {
+      if (result && code === (result.outcome === "partial" ? 1 : 0))
+        return resolve(result);
+      reject(
+        new Error(
+          failure ||
+            `Refresh worker exited with ${signal || code}. Check its terminal output.`,
+        ),
+      );
+    });
+  });
+}
+
+async function createLocalPreview({
+  directory,
+  workspaceRoot,
+  start,
+  end,
+  request,
+}) {
+  const baseline = await loadDataset(directory);
+  const workspace = refreshWorkspace(workspaceRoot, baseline.release.id);
+  let selected;
+  try {
+    selected = await refreshDirectory(workspace, baseline.directory);
+  } catch (error) {
+    await baseline.close();
+    throw error;
+  }
+  let dataset = baseline;
+  if (selected !== baseline.directory) {
+    await baseline.close();
+    dataset = await loadDataset(selected);
+  }
   let explorer = createApp(dataset);
   const opened = [dataset];
-  const { toDate } = dataset.release.stats;
-  const from = dataset.release.subsetFrom;
-  start ||= new Date(Date.parse(toDate) + 86400000).toISOString().slice(0, 10);
-  let workspace;
-  let stagingReady = false;
   let work;
   let status = { running: false, message: "" };
   const app = express();
@@ -62,69 +108,28 @@ async function createLocalPreview({ directory, start, end, request }) {
   app.use((req, res, next) => explorer(req, res, next));
 
   async function refresh() {
-    if (!end && start > lastClosedDate()) {
-      status.message = "No new sitting dates to check yet.";
-      return;
-    }
-    workspace ??= await fs.mkdtemp(
-      path.join(os.tmpdir(), "eurowatch-refresh-"),
-    );
-    const filename = path.join(workspace, "staging.db");
-    if (!stagingReady) {
-      await fs.copyFile(
-        path.join(dataset.directory, "ep_data.db"),
-        filename,
-        constants.COPYFILE_FICLONE,
-      );
-      await fs.chmod(filename, 0o600);
-      const staging = await open(filename);
-      try {
-        await run(
-          staging,
-          "DELETE FROM dataset_metadata WHERE key = 'release'",
-        );
-      } finally {
-        await close(staging);
-      }
-      stagingReady = true;
-    }
-    status.message = "Checking Parliament’s sitting calendar…";
-    const result = await importSittings({
+    const execute = request ? runRefresh : forkRefresh;
+    const result = await execute({
+      directory,
+      workspaceRoot,
       start,
       end,
-      filename,
       request,
-      log(message) {
-        status.message = message;
+      onEvent(event) {
+        status.runId = event.runId;
+        if (event.stage !== "complete") status.message = event.message;
       },
     });
-    const staging = await open(filename, { readonly: true });
-    let speechCount;
-    try {
-      speechCount = (
-        await get(staging, "SELECT COUNT(*) AS n FROM individual_speeches")
-      ).n;
-    } finally {
-      await close(staging);
-    }
-    const added = speechCount - dataset.release.stats.speeches;
-    if (added > 0) {
-      status.message = "Preparing and verifying the refreshed preview…";
-      const output = path.join(workspace, randomUUID());
-      await prepare({ source: filename, output, from, log() {} });
-      const updated = await loadDataset(output, { verifyHashes: true });
+    if (result.datasetId !== dataset.release.id) {
+      const updated = await loadDataset(result.directory);
       // Requests already running can finish against their original snapshot.
       opened.push(updated);
       explorer = createApp(updated);
       dataset = updated;
       status.datasetId = dataset.release.id;
     }
-    status.message =
-      added > 0
-        ? `Added ${added.toLocaleString("en-GB")} speeches to the preview.`
-        : "No new speeches were added.";
-    if (result.pending || result.failed)
-      status.message += ` ${result.pending} sittings pending, ${result.failed} failed. Check again to retry.`;
+    status.message = result.message;
+    status.outcome = result.outcome;
   }
 
   return {
@@ -132,7 +137,6 @@ async function createLocalPreview({ directory, start, end, request }) {
     async close() {
       await work;
       await Promise.all(opened.map((snapshot) => snapshot.close()));
-      if (workspace) await fs.rm(workspace, { recursive: true, force: true });
     },
   };
 }
@@ -144,6 +148,7 @@ async function main() {
     throw new Error("PORT must be an integer between 0 and 65535.");
   const preview = await createLocalPreview({
     directory: process.env.DATASET_DIR || (await currentDirectory(root)),
+    workspaceRoot: process.env.LOCAL_REFRESH_WORKSPACE,
     start: process.env.LOCAL_REFRESH_START,
     end: process.env.LOCAL_REFRESH_END,
   });
