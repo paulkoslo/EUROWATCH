@@ -3,6 +3,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { open, all, get, run, exec, close, backup } = require("./sqlite");
 const { migrate, validateSchema } = require("./schema");
+const { projectCanonical } = require("./canonical-schema");
 
 const SCHEMA_VERSION = 1;
 function normalizeTopic(value) {
@@ -87,6 +88,7 @@ async function prepare({ source, output, from = null, log = console.log }) {
     log("Consistent source backup created. Preparing the copy...");
     db = await open(mainFile);
     await migrate(db);
+    await projectCanonical(db);
     if (from) {
       await exec(db, "BEGIN IMMEDIATE");
       try {

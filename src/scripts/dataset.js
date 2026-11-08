@@ -2,6 +2,7 @@
 const path = require("node:path");
 const fs = require("node:fs/promises");
 const { open, close } = require("../data/sqlite");
+const { migrateArchive } = require("../data/archive-migration");
 const {
   prepare,
   loadDataset,
@@ -28,6 +29,15 @@ async function main() {
       await close(db);
     }
     console.log(`Initialized writable maintenance database: ${output}`);
+  } else if (command === "migrate") {
+    const source = option("source"),
+      output = option("output");
+    if (!source || !output)
+      throw new Error(
+        "Usage: npm run data:migrate -- --source data/ep_data.db --output data/canonical/archive.db",
+      );
+    const report = await migrateArchive({ source, output, log: console.error });
+    console.log(JSON.stringify(report, null, 2));
   } else if (command === "prepare") {
     const source = option("source"),
       output = option("output"),
@@ -61,7 +71,7 @@ async function main() {
     await dataset.close();
   } else
     throw new Error(
-      "Choose init, prepare, promote or validate. See README.md.",
+      "Choose init, migrate, prepare, promote or validate. See README.md.",
     );
 }
 
