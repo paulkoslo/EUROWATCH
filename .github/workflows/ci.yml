@@ -36,4 +36,4 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends python3 make g++
       - run: npm run build:render
-      - run: node --test test/api.test.js
+      - run: node --test test/api.test.js test/render-bootstrap.test.js

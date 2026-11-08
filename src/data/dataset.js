@@ -283,11 +283,15 @@ async function loadDataset(directory, { verifyHashes = false } = {}) {
   }
 }
 
-async function promote(directory, pointer = path.resolve("data/current.json")) {
+async function promote(
+  directory,
+  pointer = path.resolve("data/current.json"),
+  { replace = true } = {},
+) {
   const dataset = await loadDataset(directory, { verifyHashes: true });
+  const temp = `${pointer}.${crypto.randomUUID()}.tmp`;
   try {
     await fs.mkdir(path.dirname(pointer), { recursive: true });
-    const temp = `${pointer}.${process.pid}.tmp`;
     await fs.writeFile(
       temp,
       JSON.stringify({
@@ -297,11 +301,17 @@ async function promote(directory, pointer = path.resolve("data/current.json")) {
         ),
         id: dataset.release.id,
       }) + "\n",
+      { flag: "wx" },
     );
-    await fs.rename(temp, pointer);
+    if (replace) await fs.rename(temp, pointer);
+    else await fs.link(temp, pointer);
     return dataset.release.id;
   } finally {
-    await dataset.close();
+    try {
+      await fs.rm(temp, { force: true });
+    } finally {
+      await dataset.close();
+    }
   }
 }
 

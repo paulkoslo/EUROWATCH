@@ -1,10 +1,10 @@
 require("dotenv").config({ quiet: true });
-const { loadDataset, currentDirectory } = require("./src/data/dataset");
+const { loadDataset } = require("./src/data/dataset");
+const { resolveStartupDataset } = require("./src/data/render-bootstrap");
 const { createApp } = require("./src/explorer/app");
 
 async function start() {
-  const directory =
-    process.env.DATASET_DIR || (await currentDirectory(__dirname));
+  const directory = await resolveStartupDataset(__dirname);
   const dataset = await loadDataset(directory);
   const app = createApp(dataset, {
     fullDownload: process.env.ENABLE_FULL_DATASET_DOWNLOAD !== "0",
