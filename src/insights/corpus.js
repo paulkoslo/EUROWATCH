@@ -306,9 +306,13 @@ async function exportCorpus({
   const diagnostics = [];
   const selected = sample === undefined ? null : sampler(sample);
   try {
+    const limits = {
+      maxChars: options.maxChars,
+      maxPassages: options.maxPassages,
+    };
     fs.writeSync(
       fd,
-      `{"config":${JSON.stringify(config)},"officialEvidence":${JSON.stringify(officialEvidence)},"records":[`,
+      `{"limits":${JSON.stringify(limits)},"config":${JSON.stringify(config)},"officialEvidence":${JSON.stringify(officialEvidence)},"records":[`,
     );
     for await (const batch of streamCorpus(options)) {
       sittings++;

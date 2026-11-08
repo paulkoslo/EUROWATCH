@@ -193,14 +193,20 @@ function rss(publication) {
 function writePublication({ publication, directory, privateDirectory }) {
   directory = path.resolve(directory);
   privateDirectory = path.resolve(privateDirectory);
-  if (
-    directory === privateDirectory ||
-    privateDirectory.startsWith(directory + path.sep) ||
-    directory.startsWith(privateDirectory + path.sep)
-  )
-    throw new Error("Public and private artifact roots must be separate");
+  const check = () => {
+    if (
+      directory === privateDirectory ||
+      privateDirectory.startsWith(directory + path.sep) ||
+      directory.startsWith(privateDirectory + path.sep)
+    )
+      throw new Error("Public and private artifact roots must be separate");
+  };
+  check();
   fs.mkdirSync(directory, { recursive: true });
   fs.mkdirSync(privateDirectory, { recursive: true, mode: 0o700 });
+  directory = fs.realpathSync(directory);
+  privateDirectory = fs.realpathSync(privateDirectory);
+  check();
   const id = publication.public.publicationId;
   const work = path.join(directory, `.staging-${randomUUID()}`),
     target = path.join(directory, id);

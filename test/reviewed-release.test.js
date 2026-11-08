@@ -96,6 +96,34 @@ test("only exact reviewed current results change the projection or public briefi
   const write = { filename, approved, publication, editionKey: "fixture" };
   assert.ok((await writeReviewed(write)).changed);
   assert.equal((await writeReviewed(write)).changed, 0);
+  const versionTwo = {
+    ...corpus,
+    config: { ...config, promptVersion: "two", topics: ["New topic"] },
+  };
+  const nextResults = records.map((record) => {
+    const previous = results.find((result) => result.recordId === record.id);
+    return resultFor(requestFor(record, versionTwo.config), {
+      candidate: {
+        ...previous.candidate,
+        topics: [{ ...previous.candidate.topics[0], label: "New topic" }],
+      },
+    });
+  });
+  const nextApprovals = nextResults.map((result, index) => ({
+    ...approvals[index],
+    key: result.key,
+    candidateHash: hash(result.candidate),
+  }));
+  const nextApproved = await verifyApprovals({
+    filename,
+    corpus: versionTwo,
+    report: { results: nextResults },
+    approvals: nextApprovals,
+  });
+  assert.ok(
+    (await writeReviewed({ filename, approved: nextApproved })).changed,
+  );
+  assert.equal((await writeReviewed(write)).changed, 0);
   const output = path.join(directory, "release");
   await prepare({ source: filename, output, releaseId, log });
   const dataset = await loadDataset(output, { verifyHashes: true });
@@ -108,7 +136,7 @@ test("only exact reviewed current results change the projection or public briefi
           "SELECT macro_topic FROM individual_speeches WHERE id=1",
         )
       ).macro_topic,
-      "Research",
+      "New topic",
     );
     assert.equal(
       await get(

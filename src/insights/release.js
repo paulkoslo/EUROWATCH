@@ -49,6 +49,8 @@ async function verifyApprovals({ filename, corpus, report, approvals }) {
     from: dates[0],
     to: dates.at(-1),
     kinds,
+    maxChars: corpus.limits?.maxChars,
+    maxPassages: corpus.limits?.maxPassages,
   })) {
     for (const record of current) {
       const reviewed = requested.get(record.id);
@@ -130,6 +132,7 @@ async function writeReviewed({ filename, approved, publication, editionKey }) {
           [request.key, audit],
         );
         if (
+          previous ||
           record.kind !== "speech" ||
           !/^speech:\d+$/.test(record.id) ||
           record.scope?.complete === false
