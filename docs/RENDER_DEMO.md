@@ -2,9 +2,9 @@
 
 Use these settings for a Render web service running the prepared-dataset version of EUROWATCH.
 
-## Prepare before changing the service
+## Rehearse before cutover
 
-The stabilized server requires a release directory containing `ep_data.db`, `analytics.db` and `manifest.json`. It refuses legacy databases without this metadata. Generate the release locally from a verified source:
+The current server opens a prepared release directory containing `ep_data.db`, `analytics.db` and `manifest.json`. The existing full archive is the production seed. First confirm the source path, coverage and free space on Render. Use a consistent copy of that archive for the rehearsal:
 
 ```sh
 npm ci
@@ -13,6 +13,8 @@ npm run data:validate -- --dataset data/releases/staging
 ```
 
 For a smaller snapshot, add `--from 2020-01-01` and a new output directory. Do not upload the previously generated `data/demo-data` directory; the audited copy is inconsistent.
+
+Use the full archive when rehearsing migration parity. The commands above build the current release format. The production cutover uses the versioned migration and seeds from the verified archive once. [Archive migration and hosted release gate](ROADMAP.md)
 
 ## Render settings
 
