@@ -153,10 +153,21 @@ function validateCandidate(candidate, request) {
   )
     throw new Error("Empty output must be uncertain");
   return {
-    topics: candidate.topics,
+    topics: candidate.topics.map(({ label, confidence, passageIds }) => ({
+      label,
+      confidence,
+      passageIds,
+    })),
     claims: candidate.claims.map((c) => {
       const p = passages.get(c.passageId);
-      return { ...c, sourceUrl: p.sourceUrl, sourceRevision: p.sourceRevision };
+      return {
+        text: c.text,
+        passageId: c.passageId,
+        quote: c.quote,
+        speakerId: p.speakerId ?? null,
+        sourceUrl: p.sourceUrl,
+        sourceRevision: p.sourceRevision,
+      };
     }),
     uncertain: candidate.uncertain,
   };
@@ -184,7 +195,41 @@ function resultFor(request, response, now = new Date().toISOString()) {
   };
 }
 
+async function attemptResult(request, provider, reserve) {
+  const record = request.input.record;
+  let usage;
+  try {
+    const response = await provider.generate(request);
+    usage = response.usage;
+    if (
+      usage &&
+      (!Number.isFinite(usage.costUsd) ||
+        usage.costUsd < 0 ||
+        usage.costUsd > reserve + 1e-9)
+    )
+      throw new Error("Provider usage exceeds reservation");
+    return resultFor(request, response);
+  } catch (error) {
+    usage ||= error.usage;
+    const costKnown = Number.isFinite(usage?.costUsd) && usage.costUsd >= 0;
+    return {
+      key: request.key,
+      recordId: record.id,
+      inputRevision: record.inputRevision,
+      versions: request.versions,
+      status: "failed",
+      reason:
+        costKnown && usage.costUsd > reserve + 1e-9
+          ? "usage_above_reservation"
+          : "provider_or_validation_failed",
+      generatedAt: new Date().toISOString(),
+      usage: costKnown ? usage : null,
+    };
+  }
+}
+
 module.exports = {
+  attemptResult,
   hash,
   validateRecord,
   joinEvidence,

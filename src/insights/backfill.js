@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
-const { hash, requestFor, resultFor, validateCandidate } = require("./model");
+const { hash, requestFor, attemptResult, resultFor } = require("./model");
 
 function durableWrite(file, data) {
   const temp = `${file}.${randomUUID()}.tmp`;
@@ -66,6 +66,16 @@ async function backfill({
       runId,
       startedAt: new Date().toISOString(),
     });
+    if (provider) {
+      const identity = provider.kind || "custom";
+      const file = path.join(checkpoint, "provider.json");
+      if (
+        fs.existsSync(file) &&
+        JSON.parse(fs.readFileSync(file, "utf8")).kind !== identity
+      )
+        throw new Error("Use a separate checkpoint for a different provider.");
+      if (!fs.existsSync(file)) durableWrite(file, { kind: identity });
+    }
     const objects = path.join(checkpoint, "objects");
     fs.mkdirSync(objects, { recursive: true });
     const ledger = path.join(checkpoint, "events.jsonl");
@@ -78,6 +88,7 @@ async function backfill({
           .map((line) => JSON.parse(line))
       : [];
     let reservedUsd = 0;
+    let exceeded = prior.some((event) => event.type === "spend_halt");
     const attempted = new Set();
     for (const event of prior)
       if (event.type === "reserved") {
@@ -117,7 +128,11 @@ async function backfill({
         if (result.key !== request.key || result.recordId !== record.id)
           throw new Error("Checkpoint identity mismatch");
         if (["candidate", "uncertain"].includes(result.status)) {
-          validateCandidate(result.candidate, request);
+          result = resultFor(
+            request,
+            { candidate: result.candidate, usage: result.usage },
+            result.generatedAt,
+          );
           reused++;
         } else if (retryFailed) result = undefined;
       } else if (attempted.has(request.key) && !retryFailed) {
@@ -134,6 +149,7 @@ async function backfill({
         if (!Number.isFinite(reserve) || reserve < 0)
           throw new Error("Invalid provider reservation");
         if (!provider) reason = "provider_disabled";
+        else if (exceeded) reason = "usage_above_reservation";
         else if (attempts >= maxItems) reason = "batch_limit";
         else if (reservedUsd + reserve > budgetUsd) reason = "budget";
         if (reason)
@@ -154,26 +170,14 @@ async function backfill({
           });
           reservedUsd += reserve;
           attempts++;
-          try {
-            const response = await provider.generate(request);
-            if (
-              response.usage &&
-              (!Number.isFinite(response.usage.costUsd) ||
-                response.usage.costUsd < 0 ||
-                response.usage.costUsd > reserve + 1e-9)
-            )
-              throw new Error("Provider usage exceeds reservation");
-            result = resultFor(request, response);
-          } catch {
-            result = {
+          result = await attemptResult(request, provider, reserve);
+          if (result.reason === "usage_above_reservation") {
+            exceeded = true;
+            emit({
+              type: "spend_halt",
               key: request.key,
-              recordId: record.id,
-              inputRevision: record.inputRevision,
-              versions: request.versions,
-              status: "failed",
-              reason: "provider_or_validation_failed",
-              generatedAt: new Date().toISOString(),
-            };
+              costUsd: result.usage.costUsd,
+            });
           }
           durableWrite(file, result);
           emit({
@@ -206,6 +210,7 @@ async function backfill({
       attempts,
       reused,
       reservedUsd,
+      spendHalted: exceeded,
       budgetUsd,
       reportedCostUsd: results.reduce(
         (sum, r) => sum + (r.usage?.costUsd || 0),

@@ -30,6 +30,7 @@ function openAIProvider({
     );
   }
   return {
+    kind: "openai",
     reserve,
     async generate(request) {
       const response = await fetchImpl(
@@ -53,8 +54,6 @@ function openAIProvider({
       if (!response.ok) throw new Error(`OpenAI HTTP ${response.status}`);
       const body = await response.json();
       const choice = body.choices?.[0];
-      if (choice?.finish_reason !== "stop" || choice.message?.refusal)
-        throw new Error("Provider refused or did not finish");
       const usage = body.usage;
       if (
         !usage ||
@@ -64,25 +63,36 @@ function openAIProvider({
         usage.completion_tokens < 0
       )
         throw new Error("Missing provider usage");
-      return {
-        candidate: JSON.parse(choice.message.content),
-        usage: {
-          inputTokens: usage.prompt_tokens,
-          outputTokens: usage.completion_tokens,
-          costUsd:
-            (usage.prompt_tokens * inputUsdPerMillion +
-              usage.completion_tokens * outputUsdPerMillion) /
-            1e6,
-          providerResponseId: body.id,
-          actualModel: body.model,
-        },
+      const accounting = {
+        inputTokens: usage.prompt_tokens,
+        outputTokens: usage.completion_tokens,
+        costUsd:
+          (usage.prompt_tokens * inputUsdPerMillion +
+            usage.completion_tokens * outputUsdPerMillion) /
+          1e6,
+        providerResponseId: body.id,
+        actualModel: body.model,
       };
+      try {
+        if (choice?.finish_reason !== "stop" || choice.message?.refusal)
+          throw new Error("Provider refused or did not finish");
+        return {
+          candidate: JSON.parse(choice.message.content),
+          usage: accounting,
+        };
+      } catch (error) {
+        throw Object.assign(
+          new Error("Provider output could not be used", { cause: error }),
+          { usage: accounting },
+        );
+      }
     },
   };
 }
 
 function offlineProvider(responses = {}) {
   return {
+    kind: "offline",
     reserve: () => 0,
     async generate(request) {
       if (!Object.hasOwn(responses, request.key))

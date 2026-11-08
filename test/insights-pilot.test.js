@@ -114,6 +114,9 @@ test("offline pilot, explicit disabled state and independently reviewed evaluati
     key,
     reviewer: "reviewer",
     reviewedAt: "2026-11-07T12:00:00Z",
+    candidateHash: require("../src/insights/model").hash(
+      report.results[0].candidate,
+    ),
     split: "heldout",
     agenda: 1,
     candidateTopic: 1,

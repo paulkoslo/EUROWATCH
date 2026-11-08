@@ -3,6 +3,7 @@ const path = require("node:path");
 const { createHash, randomUUID } = require("node:crypto");
 const { open, all, get, exec, close } = require("../data/sqlite");
 const { hash } = require("./model");
+const { sampler } = require("./pilot");
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 function parliamentUrl(value) {
@@ -292,6 +293,7 @@ async function exportCorpus({
   output,
   config,
   officialEvidence = [],
+  sample,
   ...options
 }) {
   if (path.resolve(output) === path.resolve(options.filename))
@@ -302,6 +304,7 @@ async function exportCorpus({
   let count = 0,
     sittings = 0;
   const diagnostics = [];
+  const selected = sample === undefined ? null : sampler(sample);
   try {
     fs.writeSync(
       fd,
@@ -311,9 +314,12 @@ async function exportCorpus({
       sittings++;
       diagnostics.push(...batch.diagnostics);
       for (const record of batch.records) {
-        fs.writeSync(fd, `${count++ ? "," : ""}${JSON.stringify(record)}`);
+        if (selected) selected.add(record);
+        else fs.writeSync(fd, `${count++ ? "," : ""}${JSON.stringify(record)}`);
       }
     }
+    for (const record of selected?.records() ?? [])
+      fs.writeSync(fd, `${count++ ? "," : ""}${JSON.stringify(record)}`);
     fs.writeSync(
       fd,
       `],"exportReport":${JSON.stringify({ records: count, sittings, diagnostics })}}\n`,
@@ -352,6 +358,7 @@ if (require.main === module) {
     maxChars: Number(opts["max-chars"] || 24000),
     maxPassages: Number(opts["max-passages"] || 80),
     kinds: opts.kinds ? opts.kinds.split(",") : undefined,
+    sample: opts.sample === undefined ? undefined : Number(opts.sample),
   })
     .then((report) => console.log(JSON.stringify(report)))
     .catch((error) => {

@@ -46,14 +46,14 @@ node src/insights/cli.js pilot --input corpus.json --output pilot.json --provide
 node src/insights/cli.js evaluate --input pilot.json --reviews reviews.json --output evaluation.json
 ```
 
-Each review supplies `key`, `reviewer`, `reviewedAt`, `split` (`pilot` or `heldout`) and independent 0–1 scores for `agenda`, `candidateTopic`, `baselineTopic`, `factuality`, `citation`, `balance`. Agenda scoring isolates parser errors from topic classification errors. Include reviewer notes for invented facts, missing arguments and misleading translations. The report exposes coverage, scores and review evidence; it never auto-approves quality based on a mean. A failed/uncertain candidate must remain a failed/uncertain outcome rather than receiving a fallback policy label.
+Each review supplies `key`, `candidateHash`, `reviewer`, `reviewedAt`, `split` (`pilot` or `heldout`) and independent 0–1 scores for `agenda`, `candidateTopic`, `baselineTopic`, `factuality`, `citation`, `balance`. Agenda scoring isolates parser errors from topic classification errors. Include reviewer notes for invented facts, missing arguments and misleading translations. The report exposes coverage, scores and review evidence; it never auto-approves quality based on a mean. A failed/uncertain candidate must remain a failed/uncertain outcome rather than receiving a fallback policy label.
 
 ## Explicit live adapter
 
 The adapter uses [OpenAI Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create) JSON mode with local structure and provenance validation, a request timeout, no automatic retries, and a completion-token cap. Select a compatible model explicitly and supply current prices; no model or price is assumed.
 
 ```
-node src/insights/cli.js pilot --input corpus.json --output pilot.json --provider openai --budget 1 --input-price INPUT_USD_PER_MILLION --output-price OUTPUT_USD_PER_MILLION --max-output-tokens 1200
+node src/insights/cli.js pilot --input corpus.json --output pilot.json --checkpoint data/insights/pilot-v1 --provider openai --budget 1 --input-price INPUT_USD_PER_MILLION --output-price OUTPUT_USD_PER_MILLION --max-output-tokens 1200
 ```
 
 Only explicit `--provider openai` reads `OPENAI_API_KEY`. Budget reservations conservatively use UTF-8 input bytes plus protocol overhead and the maximum output tokens. Reported usage/cost is distinct from reserved cost; prices are operator-supplied estimates, so use a provider project spending limit as an additional billing control. No credential or paid-provider call is part of tests. No evaluation or live AI quality claim has been established by fixture tests.
@@ -73,3 +73,16 @@ Rerun the same command to resume. A failure is retained until `--retry-failed tr
 Only the named input snapshot's result versions appear in a report; prior source/enrichment versions remain in `objects/`. The publisher can read a reviewed report's `results`, join `recordId` and `inputRevision` to canonical records, reject stale revisions, then rebuild labels, charts, CSV and briefings together. Never overwrite legacy labels or promote `publicationAllowed: false` automatically. Counts distinguish candidate, uncertain, failed, skipped and interrupted records; candidate coverage is not reviewed coverage. `reportedCostUsd` summarizes available usage for this snapshot, while `reservedUsd` includes unsuccessful/unknown-cost attempts across the entire checkpoint.
 
 Run offline verification with `node --test test/insights-pilot.test.js test/insights-backfill.test.js`. The tests exercise replay, revision invalidation, budget exhaustion, failure retry, interruption, batch continuation, exclusive writers and corrupt-ledger rejection. A production pilot, human quality review, full-corpus spend/runtime estimate and unattended release verification remain operator gates.
+
+If actual usage exceeds its reservation, the checkpoint records a spending halt before processing another item. It will not submit more paid calls on restart. Investigate the model and price configuration before choosing a new versioned checkpoint.
+
+
+Use the Parliament evidence adapter to collect the week's structured decisions and adopted texts. It requires an exact calendar relationship to a transcript, uses official totals, and leaves debate-level relationships missing when the transcript does not identify the official activity.
+
+```sh
+node src/insights/parliament-evidence.js --from 2026-03-09 --to 2026-03-12 --output official-evidence.json
+node src/insights/corpus.js --db archive.db --config insight-config.json --output sample.json --sample 2
+node src/insights/corpus-backfill.js --db archive.db --config insight-config.json --checkpoint data/insights/backfill-v1 --output coverage.json
+```
+
+The last command walks the full archive in monthly batches. Supply the explicit provider and budget flags to make live calls. Use a stable read-only checkpoint. It writes per-month reports, a corpus coverage report, and a shared spending ledger. Rerunning uses completed objects and bounds the number of new attempts across the invocation.

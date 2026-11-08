@@ -22,6 +22,7 @@ export default [
       "server.js",
       "src/data/**/*.js",
       "src/explorer/**/*.js",
+      "src/insights/**/*.js",
       "test/**/*.js",
     ],
     ...js.configs.recommended,

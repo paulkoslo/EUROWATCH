@@ -2,6 +2,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { pilot, selectSample, evaluate } = require("./pilot");
+const { requestFor } = require("./model");
 const { openAIProvider, offlineProvider } = require("./provider");
 const { backfill } = require("./backfill");
 
@@ -60,7 +61,18 @@ async function main(argv) {
   if (opts.to)
     records = records.filter((r) => r.effectiveAt.slice(0, 10) <= opts.to);
   if (opts.sample) records = selectSample(records, Number(opts.sample));
-  const runner = command === "backfill" ? backfill : pilot;
+  const livePilot = command === "pilot" && opts.provider === "openai";
+  if (livePilot) {
+    if (records.length > Number(opts["max-items"] || 100))
+      throw new Error(
+        "Choose a smaller pilot sample or explicitly allow its full size with --max-items.",
+      );
+    if (!opts.checkpoint)
+      throw new Error("Live pilots need a durable --checkpoint.");
+    for (const record of records)
+      requestFor(record, input.config, input.officialEvidence);
+  }
+  const runner = command === "backfill" || livePilot ? backfill : pilot;
   const report = await runner({
     ...input,
     records,
@@ -71,6 +83,7 @@ async function main(argv) {
     retryFailed: opts["retry-failed"] === "true",
     onEvent: (event) => process.stderr.write(JSON.stringify(event) + "\n"),
   });
+  if (livePilot) report.mode = "pilot";
   write(opts.output, report);
 }
 if (require.main === module)
