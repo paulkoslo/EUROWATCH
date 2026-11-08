@@ -2,7 +2,11 @@ const fs = require("node:fs/promises");
 const { parseArgs } = require("node:util");
 const { open, all, get, exec, run, close } = require("./sqlite");
 const { migrate } = require("./schema");
-const { discoverSittings, fetchTranscript } = require("./plenary-source");
+const {
+  discoverSittings,
+  fetchTranscript,
+  sourceOutcome,
+} = require("./plenary-source");
 const { normalizePoliticalGroup } = require("../core/group-normalizer");
 const { createDetector, detectLanguage } = require("../core/detect-language");
 
@@ -139,7 +143,11 @@ async function importSittings({
   dryRun = false,
   log = console.log,
   request,
+  sourcePreference = "html",
+  onEvent = () => {},
 }) {
+  if (!["html", "docx"].includes(sourcePreference))
+    throw new Error("Unknown transcript source preference");
   if (!isDate(start) || !isDate(end) || start > end || end > lastClosedDate())
     throw new Error(
       "Use a valid inclusive --start/--end range ending before today in Brussels.",
@@ -191,7 +199,28 @@ async function importSittings({
       }
     }
 
-    const sittings = await discoverSittings(start, end, request);
+    let sittings;
+    try {
+      sittings = await discoverSittings(start, end, request);
+    } catch (error) {
+      const outcome = sourceOutcome(
+        error,
+        error.response || error.code ? "fetch" : "parse",
+      );
+      onEvent({ stage: "calendar", outcome, start, end });
+      throw new Error(`Calendar discovery failed: ${outcome}`);
+    }
+    onEvent({
+      stage: "calendar",
+      outcome: "complete",
+      start,
+      end,
+      expectedDates: sittings.map((s) => s.date),
+      nonSittingDays:
+        Math.round((Date.parse(end) - Date.parse(start)) / 86400000) +
+        1 -
+        sittings.length,
+    });
     const result = {
       confirmed: sittings.length,
       imported: 0,
@@ -199,17 +228,38 @@ async function importSittings({
       existing: 0,
       pending: 0,
       failed: 0,
+      items: [],
     };
     for (const sitting of sittings) {
+      const began = Date.now();
+      const record = (outcome, details = {}) => {
+        const item = {
+          date: sitting.date,
+          documentId: sitting.documentId,
+          outcome,
+          durationMs: Date.now() - began,
+          ...details,
+        };
+        result.items.push(item);
+        onEvent({ stage: "sitting", ...item });
+      };
+      let transcript;
       try {
         if (db && (await alreadyImported(db, sitting.date))) {
           result.existing++;
+          record("existing");
           log(`${sitting.date} already imported`);
           continue;
         }
-        const transcript = await fetchTranscript(sitting, request);
+        transcript = await fetchTranscript(sitting, request, {
+          preference: sourcePreference,
+        });
         if (transcript.source === "pending") {
           result.pending++;
+          record("pending_publication", {
+            retryable: true,
+            attempts: transcript.attempts,
+          });
           log(
             `${sitting.date} pending transcript publication (HTML: ${transcript.htmlError})`,
           );
@@ -217,6 +267,13 @@ async function importSittings({
         }
         if (dryRun) {
           result.previewed++;
+          record("previewed", {
+            source: transcript.source,
+            provenance: transcript.provenance,
+            readerUrl: transcript.readerUrl,
+            attempts: transcript.attempts,
+            speeches: transcript.speeches.length,
+          });
         } else {
           detector ??= await createDetector();
           if (
@@ -227,6 +284,13 @@ async function importSittings({
             continue;
           }
           result.imported++;
+          record("imported", {
+            source: transcript.source,
+            provenance: transcript.provenance,
+            readerUrl: transcript.readerUrl,
+            attempts: transcript.attempts,
+            speeches: transcript.speeches.length,
+          });
         }
         const fallback = transcript.htmlError
           ? ` (HTML: ${transcript.htmlError})`
@@ -236,6 +300,10 @@ async function importSittings({
         );
       } catch (error) {
         result.failed++;
+        record(error.outcome || "storage_error", {
+          attempts: error.attempts || transcript?.attempts || [],
+          retryable: true,
+        });
         log(`${sitting.date} failed: ${error.message}`);
       }
     }
@@ -256,6 +324,7 @@ async function main() {
       end: { type: "string" },
       db: { type: "string" },
       "dry-run": { type: "boolean" },
+      source: { type: "string" },
       help: { type: "boolean" },
     },
   });
@@ -269,6 +338,7 @@ async function main() {
     start: values.start,
     end: values.end,
     filename: values.db,
+    sourcePreference: values.source || "html",
     dryRun: values["dry-run"],
   });
   console.log(JSON.stringify(result));

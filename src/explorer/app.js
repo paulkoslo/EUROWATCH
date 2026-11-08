@@ -79,6 +79,12 @@ function createApp(
   app.get("/api/data-status", (req, res) =>
     res.json({
       ...dataset.release,
+      coverage: {
+        latestStoredSitting: dataset.release.stats.toDate,
+        lastSuccessfulRefresh: dataset.release.refresh?.completedAt || null,
+        pendingDates: dataset.release.refresh?.pendingDates ?? null,
+        failedDates: dataset.release.refresh?.failedDates ?? null,
+      },
       analyticsAvailable: !!dataset.analytics,
       analyticsError: dataset.analytics
         ? null
@@ -192,6 +198,9 @@ function createApp(
         "stored_speech_count",
         "observed_months",
         "calendar_months",
+        "classified_speech_count",
+        "classification_rate",
+        "classified_months",
       ],
     ];
     for (let i = 0; i < result.labels.length; i++)
@@ -201,6 +210,9 @@ function createApp(
         result.coverage[i].coverage,
         result.coverage[i].observedMonths,
         result.coverage[i].months,
+        result.coverage[i].classified,
+        result.coverage[i].classificationRate,
+        result.coverage[i].classifiedMonths,
       ]);
     res.send(
       "\ufeff" +

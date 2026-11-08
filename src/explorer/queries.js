@@ -167,22 +167,38 @@ async function series(dataset, params) {
     "SELECT period,count FROM coverage WHERE period>=? AND period<=?",
     [start, end],
   );
+  const classifiedRows = await all(
+    dataset.analytics,
+    "SELECT period,SUM(count) AS count FROM topic_series WHERE period>=? AND period<=? GROUP BY period",
+    [start, end],
+  );
+  const classified = new Map(
+    classifiedRows.map((row) => [row.period, row.count]),
+  );
   const covered = new Map(coverage.map((row) => [row.period, row.count]));
   const buckets = new Map();
-  if (topics.length && start <= end) {
+  if (start <= end) {
     const cursor = new Date(`${start}-01T00:00:00Z`);
     let count = 0;
     while (cursor.toISOString().slice(0, 7) <= end && count++ < 1200) {
       const month = cursor.toISOString().slice(0, 7),
         key = periodFor(month, params.interval);
       if (!buckets.has(key))
-        buckets.set(key, { coverage: 0, months: 0, observedMonths: 0 });
+        buckets.set(key, {
+          coverage: 0,
+          classified: 0,
+          months: 0,
+          observedMonths: 0,
+          classifiedMonths: 0,
+        });
       const bucket = buckets.get(key);
       bucket.months++;
       if (covered.has(month)) {
         bucket.coverage += covered.get(month);
         bucket.observedMonths++;
       }
+      bucket.classified += classified.get(month) || 0;
+      if (classified.get(month)) bucket.classifiedMonths++;
       cursor.setUTCMonth(cursor.getUTCMonth() + 1);
     }
   }
@@ -202,11 +218,20 @@ async function series(dataset, params) {
     datasets: topics.map((label) => ({
       label,
       data: labels.map((key) =>
-        buckets.get(key).coverage ? totals.get(label).get(key) || 0 : null,
+        buckets.get(key).classified ? totals.get(label).get(key) || 0 : null,
       ),
     })),
-    coverage: labels.map((key) => ({ period: key, ...buckets.get(key) })),
-    note: "Counts describe stored speeches with derived agenda-topic labels. A blank period has no stored speeches; partial periods include only observed months.",
+    coverage: labels.map((key) => {
+      const bucket = buckets.get(key);
+      return {
+        period: key,
+        ...bucket,
+        classificationRate: bucket.coverage
+          ? bucket.classified / bucket.coverage
+          : null,
+      };
+    }),
+    note: "Counts describe speeches with macro-topic classifications. Blank means no classified speeches; zero means classified speeches exist but none match the selected topic. Coverage reports stored and classified speeches, including partial periods.",
   };
 }
 module.exports = {
