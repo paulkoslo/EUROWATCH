@@ -73,7 +73,13 @@ function contextHtml(context) {
               `<li>${escape(event.date)} · <a href="${escape(event.sourceUrl)}">${escape(display(event.type) || event.id)}</a></li>`,
           )
           .join("");
-        return `<li><a href="${escape(record.sourceUrl)}">${escape(record.title)}</a><p>${escape(record.id)}${record.date ? " · " + escape(record.date) : ""}</p>${events ? "<ol>" + events + "</ol>" : ""}</li>`;
+        const coverage =
+          record.coverage === "bounded"
+            ? "<p>Partial timeline. The collection reached its page limit.</p>"
+            : record.coverage === "partial"
+              ? "<p>Partial timeline. Parliament returned events without a usable date or identity.</p>"
+              : "";
+        return `<li><a href="${escape(record.sourceUrl)}">${escape(record.title)}</a><p>${escape(record.id)}${record.date ? " · " + escape(record.date) : ""}</p>${coverage}${events ? "<ol>" + events + "</ol>" : ""}</li>`;
       })
       .join("");
     return `<section class="panel"><h2>${escape(title)}</h2>${items ? "<ul>" + items + "</ul>" : "<p>No records in this edition.</p>"}</section>`;

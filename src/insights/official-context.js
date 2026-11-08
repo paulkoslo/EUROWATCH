@@ -106,6 +106,7 @@ function recordOf(row, kind, id, events) {
 
 async function procedureEvents(get, id) {
   const events = new Map();
+  let omitted = 0;
   for (let page = 0; page < 8; page++) {
     const rows = await retrieve(get, `procedures/${id}/events`, {
       limit: 50,
@@ -117,8 +118,10 @@ async function procedureEvents(get, id) {
         typeof row?.id !== "string" ||
         !/^eli\/dl\/event\/[A-Z0-9-]+$/.test(row.id) ||
         !isoDate(row.activity_date)
-      )
+      ) {
+        omitted++;
         continue;
+      }
       const value = {
         id: row.id,
         date: row.activity_date,
@@ -134,7 +137,8 @@ async function procedureEvents(get, id) {
     }
     if (rows.length < 50)
       return {
-        coverage: "complete_for_request",
+        coverage: omitted ? "partial" : "complete_for_request",
+        omitted,
         events: [...events.values()].sort(
           (a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id),
         ),
@@ -143,6 +147,7 @@ async function procedureEvents(get, id) {
   }
   return {
     coverage: "bounded",
+    omitted,
     events: [...events.values()].sort(
       (a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id),
     ),
@@ -175,6 +180,7 @@ async function collectOfficialContext({
         records.push({
           ...recordOf(rows[0], kind, id, timeline.events),
           coverage: timeline.coverage,
+          omittedEvents: timeline.omitted ?? 0,
         });
       } catch {
         issues.push({ kind, id, outcome: "source_error" });

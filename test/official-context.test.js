@@ -30,6 +30,7 @@ test("official context follows exact Parliament IDs and serves one verified rele
           activity_date: "2026-02-09",
           had_activity_type: "def/ep-activities/ANNOUNCEMENT",
         },
+        { id: "eli/dl/event/UNDATED" },
       ],
       "parliamentary-questions/E-10-2026-000002": [
         {
@@ -55,6 +56,7 @@ test("official context follows exact Parliament IDs and serves one verified rele
   });
   assert.equal(context.records.length, 3);
   assert.equal(context.records[0].events.length, 1);
+  assert.equal(context.records[0].coverage, "partial");
   assert.deepEqual(context.issues, [
     { kind: "committees", id: "AFCO-AD-111111", outcome: "source_error" },
   ]);
@@ -80,6 +82,7 @@ test("official context follows exact Parliament IDs and serves one verified rele
   assert.equal((await api.json()).context.contextId, context.contextId);
   const html = await (await fetch(base + "/parliament")).text();
   assert.match(html, /Report on oversight/);
+  assert.match(html, /Partial timeline/);
   assert.match(html, /&lt;script&gt;/);
   assert.doesNotMatch(html, /<script>/);
 });
