@@ -85,4 +85,7 @@ node src/insights/corpus.js --db archive.db --config insight-config.json --outpu
 node src/insights/corpus-backfill.js --db archive.db --config insight-config.json --checkpoint data/insights/backfill-v1 --output coverage.json
 ```
 
-The last command walks the full archive in monthly batches. Supply the explicit provider and budget flags to make live calls. Use a stable read-only checkpoint. It writes per-month reports, a corpus coverage report, and a shared spending ledger. Rerunning uses completed objects and bounds the number of new attempts across the invocation.
+The last command walks the full archive in monthly batches. Supply the explicit provider and budget flags to make live calls. Use a stable, read-only SQLite backup with no pending WAL. Completed monthly reports are keyed to that snapshot, configuration and official evidence. It writes per-month reports, a corpus coverage report, and a shared spending ledger. Rerunning uses completed objects and bounds the number of new attempts across the invocation.
+
+
+Rerun the original agenda-only prompt against the same sample using `node src/insights/legacy-baseline.js --input sample.json --taxonomy legacy-labels.json --output baseline.json`. The taxonomy file is a frozen JSON array of the original labels. Use a separate checkpoint, explicit provider, budget and prices for a paid baseline. Original archived labels remain available for comparison. For a live briefing pilot, export `--kinds debate,sitting` and set `--max-items` to cover your chosen sample size.

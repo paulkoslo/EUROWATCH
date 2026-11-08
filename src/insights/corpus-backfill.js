@@ -32,6 +32,20 @@ async function corpusBackfill({
       pid: process.pid,
       startedAt: new Date().toISOString(),
     });
+    const identity = async () => {
+      const wal = await fs.stat(`${filename}-wal`).catch((error) => {
+        if (error.code !== "ENOENT") throw error;
+      });
+      if (wal?.size)
+        throw new Error(
+          "Backfill needs a checkpointed archive with no pending SQLite WAL.",
+        );
+      const stat = await fs.stat(filename, { bigint: true });
+      return [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs]
+        .map(String)
+        .join(":");
+    };
+    const source = await identity();
     const db = await open(filename, { readonly: true });
     let windows;
     try {
@@ -47,13 +61,6 @@ async function corpusBackfill({
     } finally {
       await close(db);
     }
-    const identity = async () => {
-      const stat = await fs.stat(filename, { bigint: true });
-      return [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs]
-        .map(String)
-        .join(":");
-    };
-    const source = await identity();
     const scope = hash({
       source,
       config,
@@ -160,6 +167,8 @@ async function corpusBackfill({
       )
         break;
     }
+    if ((await identity()) !== source)
+      throw new Error("Archive changed during the backfill.");
     durableWrite(path.join(checkpoint, "corpus-report.json"), aggregate);
     return aggregate;
   } finally {
