@@ -147,7 +147,18 @@ test("shared update job publishes twice, replays unchanged and preserves the pre
       .status,
     403,
   );
-  assert.equal((await startUpdate({ Authorization: auth })).status, 202);
+  const launchedResponses = await Promise.all([
+    startUpdate({ Authorization: auth }),
+    startUpdate({ Authorization: auth }),
+  ]);
+  assert.deepEqual(
+    launchedResponses.map((result) => result.status).sort(),
+    [202, 409],
+  );
+  assert.equal(
+    (await storage.readLaunch(launched.runId)).value.jobId,
+    "job-test",
+  );
 
   const dates = ["2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12"];
   let failDate;

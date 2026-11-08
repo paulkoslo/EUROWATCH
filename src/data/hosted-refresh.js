@@ -61,7 +61,10 @@ async function claimLease(storage, runId) {
   return {
     async assertHeld() {
       await renew();
-      if (error)
+      if (
+        error ||
+        Date.parse(lease.value.expiresAt) - Date.now() < LEASE_MS / 2
+      )
         throw new Error("The update lost its writer lease.", { cause: error });
     },
     async close() {
